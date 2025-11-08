@@ -9,6 +9,7 @@ Features:
 4. Identifies the KPIs that measure success
 5. Check for compliance/legal risks
 
+Multi-user collaboration where team members can sign in and be assigned their respective roles with different permissions within the app. 
 
 
 
