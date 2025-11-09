@@ -221,8 +221,13 @@ export default function ProjectDetailClient({
   const canApprove = isPMOrAdmin // Only PM and Admin can approve proposals
 
   // Drag and drop sensors
+  // Activation constraint allows clicks to work while preserving drag functionality
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Activate drag after 8px of movement (allows clicks to work)
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
