@@ -1,22 +1,10 @@
 'use client'
 
 import { MessageSquare, User, Clock, CheckCircle, XCircle } from 'lucide-react'
-
-interface Feedback {
-  _id: string
-  type: 'comment' | 'proposal'
-  content: string
-  aiAnalysis?: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-  userId: {
-    name: string
-    email: string
-  }
-}
+import type { FeedbackResponse } from '@/types'
 
 interface FeedbackThreadProps {
-  feedback: Feedback[]
+  feedback: FeedbackResponse[]
   onApprove?: (feedbackId: string) => void
   onReject?: (feedbackId: string) => void
   canApprove?: boolean
@@ -41,14 +29,16 @@ export default function FeedbackThread({
     <div className="space-y-4">
       {feedback.map((item) => (
         <div
-          key={item._id}
+          key={item._id || item.id}
           className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
         >
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 text-gray-500" />
               <span className="font-medium text-gray-900 dark:text-white">
-                {item.userId.name}
+                {typeof item.userId === 'object' && item.userId !== null
+                  ? item.userId.name || 'Unknown User'
+                  : 'Unknown User'}
               </span>
               <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                 {item.type}
@@ -58,14 +48,14 @@ export default function FeedbackThread({
               {item.status === 'pending' && item.type === 'proposal' && canApprove && (
                 <>
                   <button
-                    onClick={() => onApprove?.(item._id)}
+                    onClick={() => onApprove?.(item._id || item.id)}
                     className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900 rounded"
                     title="Approve"
                   >
                     <CheckCircle className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => onReject?.(item._id)}
+                    onClick={() => onReject?.(item._id || item.id)}
                     className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded"
                     title="Reject"
                   >
@@ -97,7 +87,14 @@ export default function FeedbackThread({
               </p>
               <p className="text-sm text-blue-800 dark:text-blue-300 whitespace-pre-wrap">
                 {typeof item.aiAnalysis === 'string'
-                  ? JSON.parse(item.aiAnalysis).summary || item.aiAnalysis
+                  ? (() => {
+                      try {
+                        const parsed = JSON.parse(item.aiAnalysis)
+                        return parsed.summary || item.aiAnalysis
+                      } catch {
+                        return item.aiAnalysis
+                      }
+                    })()
                   : item.aiAnalysis}
               </p>
             </div>

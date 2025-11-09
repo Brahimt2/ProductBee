@@ -19,7 +19,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <UserProvider>
+        {/* Userprovider wraps  */}
+        <UserProvider> 
           {children}
           <Toaster position="top-right" />
         </UserProvider>

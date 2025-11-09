@@ -1,7 +1,5 @@
 /**
- * Roadmap-related types
- * Note: These are kept for backward compatibility
- * New types should be added to feedback.ts
+ * Feedback-related types
  */
 
 export interface RoadmapFeature {
@@ -24,3 +22,6 @@ export interface ProposalAnalysis {
   recommendedAdjustments: string
 }
 
+export interface RoadmapComparison {
+  changedFeatures: RoadmapFeature[]
+}

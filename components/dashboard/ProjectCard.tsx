@@ -1,34 +1,25 @@
 'use client'
 
 import Link from 'next/link'
-import { Calendar, AlertCircle } from 'lucide-react'
+import { Calendar } from 'lucide-react'
+import type { ProjectResponse } from '@/types'
 
 interface ProjectCardProps {
-  project: {
-    _id: string
-    name: string
-    description: string
-    roadmap: {
-      summary: string
-      riskLevel: string
-    }
-    createdAt: string
-    createdBy?: {
-      name: string
-      email: string
-    }
-  }
+  project: ProjectResponse
+}
+
+// Risk level color mapping
+const riskColors: Record<string, string> = {
+  low: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+  high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 }
 
 export default function ProjectCard({ project }: ProjectCardProps) {
-  const riskColors: Record<string, string> = {
-    low: 'bg-green-100 text-green-800',
-    medium: 'bg-yellow-100 text-yellow-800',
-    high: 'bg-red-100 text-red-800',
-  }
+  const riskLevel = project.roadmap.riskLevel?.toLowerCase() || 'low'
 
   return (
-    <Link href={`/project/${project._id}`}>
+    <Link href={`/project/${project._id || project.id}`}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700">
         <div className="flex items-start justify-between mb-4">
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -36,7 +27,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
           </h3>
           <span
             className={`px-2 py-1 rounded-full text-xs font-medium ${
-              riskColors[project.roadmap.riskLevel.toLowerCase()] || 'bg-gray-100 text-gray-800'
+              riskColors[riskLevel] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
             }`}
           >
             {project.roadmap.riskLevel}

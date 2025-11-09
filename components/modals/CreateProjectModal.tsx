@@ -39,17 +39,37 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
         }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create project')
+      let responseData
+      try {
+        responseData = await response.json()
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError)
+        throw new Error(`Server error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
+      if (!response.ok || !responseData.success) {
+        const errorMessage = responseData.error || responseData.message || 'Failed to create project'
+        console.error('API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorMessage,
+          code: responseData.code,
+          fullResponse: responseData,
+        })
+        throw new Error(errorMessage)
+      }
+
+      // Handle wrapped response: { success: true, data: { project: {...}, features: [...] } }
+      const projectData = responseData.data
+      if (!projectData?.project?.id) {
+        throw new Error('Invalid response from server')
+      }
+
       toast.success('Project created successfully!')
       onClose()
       setProjectName('')
       setProjectDescription('')
-      router.push(`/project/${data.project.id}`)
+      router.push(`/project/${projectData.project.id}`)
       router.refresh()
     } catch (error: any) {
       toast.error(error.message || 'Failed to create project')

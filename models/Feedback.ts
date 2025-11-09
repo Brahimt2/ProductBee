@@ -1,60 +1,20 @@
-import mongoose, { Schema, Document, Types } from 'mongoose'
+import { BaseModel } from './base'
 
-export interface IFeedback extends Document {
-  projectId: Types.ObjectId
-  featureId: Types.ObjectId
-  userId: Types.ObjectId
-  type: 'comment' | 'proposal'
+/**
+ * Feedback model - Represents feedback on a feature
+ * Extends BaseModel for consistent structure
+ */
+export interface Feedback extends BaseModel {
+  project_id: string
+  feature_id: string
+  type: 'comment' | 'timeline_proposal'
   content: string
-  proposedRoadmap?: object
-  aiAnalysis?: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: Date
+  status: 'pending' | 'approved' | 'rejected' | 'discussion'
+  analysis?: {
+    requires_timeline_change: boolean
+    suggested_action: string
+    affected_features: string[]
+    reasoning: string
+  }
 }
-
-const FeedbackSchema = new Schema<IFeedback>({
-  projectId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Project',
-    required: true,
-    index: true,
-  },
-  featureId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Feature',
-    required: true,
-    index: true,
-  },
-  userId: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-  type: {
-    type: String,
-    enum: ['comment', 'proposal'],
-    required: true,
-  },
-  content: {
-    type: String,
-    required: true,
-  },
-  proposedRoadmap: {
-    type: Schema.Types.Mixed,
-  },
-  aiAnalysis: {
-    type: String,
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending',
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-})
-
-export default mongoose.models.Feedback || mongoose.model<IFeedback>('Feedback', FeedbackSchema)
 

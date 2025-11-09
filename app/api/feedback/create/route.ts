@@ -1,52 +1,54 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
-import dbConnect from '@/lib/db'
-import Feedback from '@/models/Feedback'
-import User from '@/models/User'
-import Project from '@/models/Project'
-import Feature from '@/models/Feature'
+import { createServerClient } from '@/lib/supabase'
 import { analyzeProposal } from '@/lib/gemini'
-import mongoose from 'mongoose'
+import { getUserFromSession, requireProjectAccess } from '@/lib/api/permissions'
+import { validateUUID, validateRequired, validateJsonBody, validateFeedbackType } from '@/lib/api/validation'
+import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
+import { HTTP_STATUS } from '@/lib/constants'
+import type { CreateFeedbackRequest, CreateFeedbackResponse } from '@/types/api'
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await getUserFromSession(session)
 
-    await dbConnect()
+    const body = await validateJsonBody<CreateFeedbackRequest>(request)
+    validateRequired(body, ['projectId', 'featureId', 'type', 'content'])
+    validateUUID(body.projectId, 'Project ID')
+    validateUUID(body.featureId, 'Feature ID')
+    validateFeedbackType(body.type)
 
-    const { projectId, featureId, type, content, proposedRoadmap } = await request.json()
+    const { projectId, featureId, type, content, proposedRoadmap } = body
+    const supabase = createServerClient()
 
-    if (!projectId || !featureId || !type || !content) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(projectId) || !mongoose.Types.ObjectId.isValid(featureId)) {
-      return NextResponse.json({ error: 'Invalid IDs' }, { status: 400 })
-    }
+    // Check project access
+    await requireProjectAccess(user, projectId)
 
     // Verify project and feature exist
-    const project = await Project.findById(projectId)
-    const feature = await Feature.findById(featureId)
-    
-    if (!project || !feature) {
-      return NextResponse.json({ error: 'Project or feature not found' }, { status: 404 })
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .single()
+
+    const { data: feature, error: featureError } = await supabase
+      .from('features')
+      .select('*')
+      .eq('id', featureId)
+      .single()
+
+    if (projectError || !project) {
+      throw APIErrors.notFound('Project')
     }
 
-    // Get or create user
-    let user = await User.findOne({ auth0Id: session.user.sub })
-    if (!user) {
-      user = await User.create({
-        auth0Id: session.user.sub,
-        name: session.user.name || session.user.email || 'Unknown',
-        email: session.user.email || '',
-        role: 'engineer',
-      })
+    if (featureError || !feature) {
+      throw APIErrors.notFound('Feature')
+    }
+
+    // Verify feature belongs to project
+    if (feature.project_id !== projectId) {
+      throw APIErrors.badRequest('Feature does not belong to this project')
     }
 
     let aiAnalysis = undefined
@@ -62,27 +64,58 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const feedback = await Feedback.create({
-      projectId,
-      featureId,
-      userId: user._id,
-      type,
-      content,
-      proposedRoadmap: proposedRoadmap || undefined,
-      aiAnalysis,
-      status: 'pending',
-    })
+    // Create feedback
+    const { data: feedback, error: feedbackError } = await supabase
+      .from('feedback')
+      .insert({
+        project_id: projectId,
+        feature_id: featureId,
+        user_id: user.id,
+        type,
+        content,
+        proposed_roadmap: proposedRoadmap || null,
+        ai_analysis: aiAnalysis || null,
+        status: 'pending',
+      })
+      .select(`
+        *,
+        user_id:users!feedback_user_id_fkey (
+          name,
+          email
+        )
+      `)
+      .single()
 
-    const populatedFeedback = await Feedback.findById(feedback._id)
-      .populate('userId', 'name email')
+    if (feedbackError || !feedback) {
+      throw APIErrors.internalError('Failed to create feedback')
+    }
 
-    return NextResponse.json({ feedback: populatedFeedback })
-  } catch (error: any) {
-    console.error('Error creating feedback:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to create feedback' },
-      { status: 500 }
-    )
+    // Format response
+    const formattedFeedback = {
+      _id: feedback.id,
+      id: feedback.id,
+      projectId: feedback.project_id,
+      featureId: feedback.feature_id,
+      userId: feedback.user_id ? {
+        _id: feedback.user_id.id,
+        name: feedback.user_id.name,
+        email: feedback.user_id.email,
+      } : null,
+      type: feedback.type,
+      content: feedback.content,
+      proposedRoadmap: feedback.proposed_roadmap,
+      aiAnalysis: feedback.ai_analysis,
+      status: feedback.status,
+      createdAt: feedback.created_at,
+    }
+
+    const response: CreateFeedbackResponse = {
+      feedback: formattedFeedback,
+    }
+
+    return successResponse(response, HTTP_STATUS.CREATED)
+  } catch (error) {
+    return handleError(error)
   }
 }
 

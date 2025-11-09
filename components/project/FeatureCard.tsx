@@ -1,26 +1,21 @@
 'use client'
 
 import { AlertCircle, Clock } from 'lucide-react'
+import type { FeatureResponse } from '@/types'
 
 interface FeatureCardProps {
-  feature: {
-    _id: string
-    title: string
-    description: string
-    priority: 'P0' | 'P1' | 'P2'
-    effortEstimateWeeks: number
-    status: 'backlog' | 'active' | 'blocked' | 'complete'
-  }
+  feature: FeatureResponse
   onClick: () => void
 }
 
-export default function FeatureCard({ feature, onClick }: FeatureCardProps) {
-  const priorityColors: Record<string, string> = {
-    P0: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    P1: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    P2: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  }
+// Priority color mapping
+const priorityColors: Record<string, string> = {
+  P0: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  P1: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  P2: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+}
 
+export default function FeatureCard({ feature, onClick }: FeatureCardProps) {
   return (
     <div
       onClick={onClick}
@@ -32,7 +27,7 @@ export default function FeatureCard({ feature, onClick }: FeatureCardProps) {
         </h4>
         <span
           className={`px-2 py-1 rounded text-xs font-medium ${
-            priorityColors[feature.priority] || 'bg-gray-100 text-gray-800'
+            priorityColors[feature.priority] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
           }`}
         >
           {feature.priority}

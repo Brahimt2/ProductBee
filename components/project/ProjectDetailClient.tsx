@@ -1,56 +1,34 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@auth0/nextjs-auth0/client'
 import { ArrowLeft, AlertCircle } from 'lucide-react'
+import { useProject } from '@/hooks/useProject'
+import { useFeature } from '@/hooks/useFeature'
 import FeatureCard from './FeatureCard'
 import FeatureModal from './FeatureModal'
-
-interface Feature {
-  _id: string
-  title: string
-  description: string
-  priority: 'P0' | 'P1' | 'P2'
-  effortEstimateWeeks: number
-  status: 'backlog' | 'active' | 'blocked' | 'complete'
-}
-
-interface Feedback {
-  _id: string
-  type: 'comment' | 'proposal'
-  content: string
-  aiAnalysis?: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-  userId: {
-    name: string
-    email: string
-  }
-}
-
-interface Project {
-  _id: string
-  name: string
-  description: string
-  roadmap: {
-    summary: string
-    riskLevel: string
-  }
-  createdBy?: {
-    name: string
-    email: string
-  }
-}
+import type { GetProjectResponse, FeatureResponse } from '@/types'
 
 interface ProjectDetailClientProps {
-  projectData: {
-    project: Project
-    features: Feature[]
-    feedbackByFeature: Record<string, Feedback[]>
-  }
+  projectData: GetProjectResponse
   userRole?: string
 }
+
+// Risk level color mapping
+const riskColors: Record<string, string> = {
+  low: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+  high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+}
+
+// Feature status columns
+const columns = [
+  { id: 'backlog' as const, title: 'Backlog' },
+  { id: 'active' as const, title: 'In Progress' },
+  { id: 'blocked' as const, title: 'Blocked' },
+  { id: 'complete' as const, title: 'Complete' },
+]
 
 export default function ProjectDetailClient({
   projectData: initialData,
@@ -58,63 +36,30 @@ export default function ProjectDetailClient({
 }: ProjectDetailClientProps) {
   const router = useRouter()
   const { user } = useUser()
-  const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null)
-  const [projectData, setProjectData] = useState(initialData)
+  const [selectedFeature, setSelectedFeature] = useState<FeatureResponse | null>(null)
+  const projectId = initialData.project._id || initialData.project.id
+  const { projectData, refetch } = useProject(projectId)
+  const { updateFeatureStatus } = useFeature()
 
-  const refreshData = async () => {
-    try {
-      const response = await fetch(`/api/project/${projectData.project._id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setProjectData(data)
-      }
-    } catch (error) {
-      console.error('Error refreshing data:', error)
-    }
-  }
+  // Use hook data if available and loaded, otherwise use initial data
+  const displayData = projectData && projectData.project ? projectData : initialData
 
-  const handleFeatureClick = (feature: Feature) => {
+  const handleFeatureClick = (feature: FeatureResponse) => {
     setSelectedFeature(feature)
   }
 
-  const handleFeatureUpdate = async (featureId: string, updates: Partial<Feature>) => {
-    try {
-      const response = await fetch(`/api/feature/${featureId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      })
-
-      if (response.ok) {
-        await refreshData()
-      }
-    } catch (error) {
-      console.error('Error updating feature:', error)
+  const handleFeatureUpdate = async (featureId: string, newStatus: FeatureResponse['status']) => {
+    const result = await updateFeatureStatus(featureId, newStatus)
+    if (result) {
+      refetch()
     }
   }
 
-  const handleDrop = async (featureId: string, newStatus: Feature['status']) => {
-    await handleFeatureUpdate(featureId, { status: newStatus })
-  }
-
-  const columns = [
-    { id: 'backlog', title: 'Backlog' },
-    { id: 'active', title: 'In Progress' },
-    { id: 'blocked', title: 'Blocked' },
-    { id: 'complete', title: 'Complete' },
-  ]
-
   const getFeaturesByStatus = (status: string) => {
-    return projectData.features.filter((f) => f.status === status)
+    return displayData.features.filter((f) => f.status === status)
   }
 
-  const riskColors: Record<string, string> = {
-    low: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  }
+  const riskLevel = displayData.project.roadmap.riskLevel?.toLowerCase() || 'low'
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -137,19 +82,18 @@ export default function ProjectDetailClient({
           <div className="flex items-start justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                {projectData.project.name}
+                {displayData.project.name}
               </h1>
               <p className="text-gray-600 dark:text-gray-300">
-                {projectData.project.description}
+                {displayData.project.description}
               </p>
             </div>
             <span
               className={`px-3 py-1 rounded-full text-sm font-medium ${
-                riskColors[projectData.project.roadmap.riskLevel.toLowerCase()] ||
-                'bg-gray-100 text-gray-800'
+                riskColors[riskLevel] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
               }`}
             >
-              {projectData.project.roadmap.riskLevel} Risk
+              {displayData.project.roadmap.riskLevel} Risk
             </span>
           </div>
 
@@ -159,7 +103,7 @@ export default function ProjectDetailClient({
               Roadmap Summary
             </h2>
             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-              {projectData.project.roadmap.summary}
+              {displayData.project.roadmap.summary}
             </p>
           </div>
         </div>
@@ -184,7 +128,7 @@ export default function ProjectDetailClient({
                 <div className="space-y-3 min-h-[200px]">
                   {features.map((feature) => (
                     <FeatureCard
-                      key={feature._id}
+                      key={feature._id || feature.id}
                       feature={feature}
                       onClick={() => handleFeatureClick(feature)}
                     />
@@ -206,12 +150,13 @@ export default function ProjectDetailClient({
           isOpen={!!selectedFeature}
           onClose={() => setSelectedFeature(null)}
           feature={selectedFeature}
-          projectId={projectData.project._id}
-          feedback={
-            projectData.feedbackByFeature[selectedFeature._id] || []
-          }
+          projectId={displayData.project._id || displayData.project.id}
+          feedback={displayData.feedbackByFeature[selectedFeature._id || selectedFeature.id] || []}
           userRole={userRole}
-          onFeatureUpdate={refreshData}
+          onFeatureUpdate={() => {
+            refetch()
+            setSelectedFeature(null)
+          }}
         />
       )}
     </div>

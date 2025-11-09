@@ -1,40 +1,26 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, MessageSquare, Send, Clock, AlertCircle } from 'lucide-react'
-import toast from 'react-hot-toast'
-import FeedbackThread from './FeedbackThread'
-
-interface Feature {
-  _id: string
-  title: string
-  description: string
-  priority: 'P0' | 'P1' | 'P2'
-  effortEstimateWeeks: number
-  status: 'backlog' | 'active' | 'blocked' | 'complete'
-}
-
-interface Feedback {
-  _id: string
-  type: 'comment' | 'proposal'
-  content: string
-  aiAnalysis?: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-  userId: {
-    name: string
-    email: string
-  }
-}
+import { X, MessageSquare, Send, Clock } from 'lucide-react'
+import { useFeedback } from '@/hooks/useFeedback'
+import FeedbackThread from '../feedback/FeedbackThread'
+import type { FeatureResponse, FeedbackResponse } from '@/types'
 
 interface FeatureModalProps {
   isOpen: boolean
   onClose: () => void
-  feature: Feature | null
+  feature: FeatureResponse | null
   projectId: string
-  feedback: Feedback[]
+  feedback: FeedbackResponse[]
   userRole?: string
   onFeatureUpdate?: () => void
+}
+
+// Priority color mapping
+const priorityColors: Record<string, string> = {
+  P0: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  P1: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  P2: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
 }
 
 export default function FeatureModal({
@@ -49,7 +35,7 @@ export default function FeatureModal({
   const [comment, setComment] = useState('')
   const [proposal, setProposal] = useState('')
   const [activeTab, setActiveTab] = useState<'comment' | 'proposal'>('comment')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { createFeedback, approveFeedback, rejectFeedback, isSubmitting } = useFeedback()
 
   const canApprove = userRole === 'pm' || userRole === 'admin'
 
@@ -66,92 +52,38 @@ export default function FeatureModal({
   const handleSubmitFeedback = async (type: 'comment' | 'proposal') => {
     const content = type === 'comment' ? comment : proposal
     if (!content.trim()) {
-      toast.error('Please enter some content')
       return
     }
 
-    setIsSubmitting(true)
-    try {
-      const response = await fetch('/api/feedback/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          featureId: feature._id,
-          type,
-          content: content.trim(),
-        }),
-      })
+    const result = await createFeedback({
+      projectId,
+      featureId: feature._id || feature.id,
+      type,
+      content: content.trim(),
+    })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to submit feedback')
-      }
-
-      toast.success(type === 'comment' ? 'Comment added!' : 'Proposal submitted!')
+    if (result) {
       if (type === 'comment') {
         setComment('')
       } else {
         setProposal('')
       }
       onFeatureUpdate?.()
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to submit feedback')
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
   const handleApprove = async (feedbackId: string) => {
-    try {
-      const response = await fetch('/api/feedback/approve', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ feedbackId }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to approve')
-      }
-
-      toast.success('Proposal approved!')
+    const result = await approveFeedback(feedbackId)
+    if (result) {
       onFeatureUpdate?.()
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to approve')
     }
   }
 
   const handleReject = async (feedbackId: string) => {
-    try {
-      const response = await fetch('/api/feedback/reject', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ feedbackId }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to reject')
-      }
-
-      toast.success('Proposal rejected')
+    const result = await rejectFeedback(feedbackId)
+    if (result) {
       onFeatureUpdate?.()
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to reject')
     }
-  }
-
-  const priorityColors: Record<string, string> = {
-    P0: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    P1: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    P2: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   }
 
   return (
@@ -166,7 +98,7 @@ export default function FeatureModal({
               <div className="flex items-center gap-3">
                 <span
                   className={`px-2 py-1 rounded text-xs font-medium ${
-                    priorityColors[feature.priority] || 'bg-gray-100 text-gray-800'
+                    priorityColors[feature.priority] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                   }`}
                 >
                   {feature.priority}

@@ -10,8 +10,9 @@ AUTH0_ISSUER_BASE_URL=https://your-tenant.auth0.com
 AUTH0_CLIENT_ID=your-auth0-client-id
 AUTH0_CLIENT_SECRET=your-auth0-client-secret
 
-# MongoDB Connection
-MONGODB_URI=mongodb://localhost:27017/productbee
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 # Google Gemini API
 GEMINI_API_KEY=your-gemini-api-key-here
@@ -26,9 +27,14 @@ GEMINI_API_KEY=your-gemini-api-key-here
 4. Set logout URL: `http://localhost:3000`
 5. Copy the credentials to your `.env.local`
 
-### MongoDB
-- Local: `mongodb://localhost:27017/productbee`
-- MongoDB Atlas: Get connection string from your cluster
+### Supabase
+1. Sign up at https://supabase.com
+2. Create a new project
+3. Go to Project Settings > API
+4. Copy your Project URL to `NEXT_PUBLIC_SUPABASE_URL`
+5. Copy your `anon` `public` key to `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+6. Run the SQL schema from `supabase/schema.sql` in the SQL Editor
+7. Enable Realtime in Database > Replication settings for tables: projects, features, feedback
 
 ### Gemini API
 1. Go to https://makersuite.google.com/app/apikey

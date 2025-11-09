@@ -1,34 +1,68 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useUser } from '@auth0/nextjs-auth0/client'
 import { Plus, LogOut } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import ProjectCard from './ProjectCard'
-import CreateProjectModal from './CreateProjectModal'
-
-interface Project {
-  _id: string
-  name: string
-  description: string
-  roadmap: {
-    summary: string
-    riskLevel: string
-  }
-  createdAt: string
-  createdBy?: {
-    name: string
-    email: string
-  }
-}
+import CreateProjectModal from '../modals/CreateProjectModal'
+import type { ProjectResponse } from '@/types'
 
 interface DashboardClientProps {
-  projects: Project[]
+  projects?: ProjectResponse[]
 }
 
-export default function DashboardClient({ projects: initialProjects }: DashboardClientProps) {
+export default function DashboardClient({ projects: initialProjects = [] }: DashboardClientProps) {
   const { user, isLoading } = useUser()
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [projects, setProjects] = useState(initialProjects)
+  const [projects, setProjects] = useState<ProjectResponse[]>(initialProjects || [])
+
+  // Real-time subscription for projects
+  useEffect(() => {
+    // Ensure we always have an array
+    if (Array.isArray(initialProjects)) {
+      setProjects(initialProjects)
+    } else {
+      setProjects([])
+    }
+
+    const projectsChannel = supabase
+      .channel('dashboard-projects')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'projects',
+        },
+        async () => {
+          // Refresh projects list when changes occur
+          try {
+            const response = await fetch('/api/projects')
+            const responseData = await response.json()
+            
+            if (response.ok && responseData.success) {
+              // Handle wrapped response: { success: true, data: { projects: [...] } }
+              const data = responseData.data
+              // Ensure we always set an array
+              if (Array.isArray(data?.projects)) {
+                setProjects(data.projects)
+              } else {
+                setProjects([])
+              }
+            }
+          } catch (error) {
+            console.error('Error refreshing projects:', error)
+          }
+        }
+      )
+      .subscribe()
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(projectsChannel)
+    }
+  }, [initialProjects])
 
   if (isLoading) {
     return (
@@ -78,7 +112,7 @@ export default function DashboardClient({ projects: initialProjects }: Dashboard
           </button>
         </div>
 
-        {projects.length === 0 ? (
+        {!projects || projects.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-gray-500 dark:text-gray-400 mb-4">
               No projects yet. Create your first project to get started!
@@ -93,8 +127,8 @@ export default function DashboardClient({ projects: initialProjects }: Dashboard
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map((project) => (
-              <ProjectCard key={project._id} project={project} />
+            {projects && projects.map((project) => (
+              <ProjectCard key={project._id || project.id} project={project} />
             ))}
           </div>
         )}
@@ -102,7 +136,30 @@ export default function DashboardClient({ projects: initialProjects }: Dashboard
 
       <CreateProjectModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false)
+          // Refresh projects after modal closes
+          fetch('/api/projects')
+            .then((res) => res.json())
+            .then((responseData) => {
+              // Handle wrapped response: { success: true, data: { projects: [...] } }
+              if (responseData.success && responseData.data) {
+                const data = responseData.data
+                // Ensure we always set an array
+                if (Array.isArray(data.projects)) {
+                  setProjects(data.projects)
+                } else {
+                  setProjects([])
+                }
+              } else {
+                setProjects([])
+              }
+            })
+            .catch((error) => {
+              console.error('Error refreshing projects:', error)
+              setProjects([])
+            })
+        }}
       />
     </div>
   )

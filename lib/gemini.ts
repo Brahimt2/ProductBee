@@ -1,4 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { getRoadmapPrompt, parseRoadmapResponse } from './prompts/roadmap'
+import { getProposalAnalysisPrompt, parseProposalAnalysisResponse } from './prompts/feedback'
+import { getRoadmapComparisonPrompt, parseRoadmapComparisonResponse } from './prompts/comparison'
+import { APIErrors } from './api/errors'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
@@ -8,117 +12,123 @@ if (!GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
 
-export async function generateRoadmap(projectName: string, projectDescription: string) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
-
-  const prompt = `Given this project description, return a JSON object with the following structure:
-{
-  "summary": "A brief summary of the project roadmap",
-  "riskLevel": "low" | "medium" | "high",
-  "features": [
-    {
-      "title": "Feature title",
-      "description": "Feature description",
-      "priority": "P0" | "P1" | "P2",
-      "effortEstimateWeeks": number,
-      "dependsOn": [] // array of feature indices (0-based) this feature depends on
-    }
-  ]
+/**
+ * Get Gemini model instance
+ * Defaults to gemini-pro, but can be overridden for different models
+ * gemini-2.0-flash-lite now
+ */
+function getModel(modelName: string = 'gemini-2.0-flash-lite') {
+  return genAI.getGenerativeModel({ model: modelName })
 }
 
-Project Name: ${projectName}
-Project Description: ${projectDescription}
-
-Return ONLY valid JSON, no markdown formatting, no code blocks.`
-
+/**
+ * Generate roadmap from project name and description
+ */
+export async function generateRoadmap(projectName: string, projectDescription: string) {
   try {
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not set in environment variables')
+    }
+
+    // Validate input
+    if (!projectName || !projectDescription) {
+      throw new Error('Project name and description are required')
+    }
+
+    const model = getModel()
+    const prompt = getRoadmapPrompt({ projectName, projectDescription })
+    
+    console.log('[Gemini] Generating roadmap for project:', projectName)
+    console.log('[Gemini] Prompt length:', prompt.length)
+    
     const result = await model.generateContent(prompt)
     const response = await result.response
-    const text = response.text()
     
-    // Clean up the response (remove markdown code blocks if present)
-    let cleanedText = text.trim()
-    if (cleanedText.startsWith('```json')) {
-      cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-    } else if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/```\n?/g, '')
+    // Check if response was blocked
+    if (response.blockedReason) {
+      throw new Error(`Response was blocked: ${response.blockedReason}`)
     }
     
-    const roadmap = JSON.parse(cleanedText)
-    return roadmap
-  } catch (error) {
-    console.error('Error generating roadmap:', error)
-    throw new Error('Failed to generate roadmap')
+    const text = response.text()
+    
+    if (!text || text.length === 0) {
+      throw new Error('Empty response from Gemini API')
+    }
+    
+    console.log('[Gemini] Received response, length:', text.length)
+    console.log('[Gemini] Response preview:', text.substring(0, 200))
+    
+    return parseRoadmapResponse(text)
+  } catch (error: any) {
+    console.error('[Gemini] Error generating roadmap:', error)
+    console.error('[Gemini] Error details:', {
+      message: error?.message,
+      name: error?.name,
+      code: error?.code,
+      status: error?.status,
+      statusMessage: error?.statusMessage,
+      stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
+    })
+    
+    // Handle specific Gemini API errors
+    if (error?.message?.includes('API key')) {
+      throw APIErrors.internalError('Invalid or missing Gemini API key. Please check your GEMINI_API_KEY environment variable.')
+    }
+    
+    if (error?.message?.includes('quota') || error?.message?.includes('rate limit')) {
+      throw APIErrors.internalError('Gemini API quota exceeded or rate limited. Please try again later.')
+    }
+    
+    if (error?.message?.includes('model')) {
+      throw APIErrors.internalError('Gemini model not available. Please check your API access.')
+    }
+    
+    // Preserve the original error message if it's informative
+    const errorMessage = error?.message || 'Failed to generate roadmap'
+    throw APIErrors.internalError(`Failed to generate roadmap: ${errorMessage}`)
   }
 }
 
+/**
+ * Analyze engineer proposal and its impact on timeline
+ */
 export async function analyzeProposal(proposalContent: string, originalRoadmap: any) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
-
-  const prompt = `Summarize this engineer proposal and explain its impact on the timeline.
-
-Original Roadmap Summary: ${JSON.stringify(originalRoadmap.summary)}
-
-Engineer Proposal: ${proposalContent}
-
-Return a JSON object with:
-{
-  "summary": "Brief summary of the proposal",
-  "timelineImpact": "Description of timeline impact",
-  "recommendedAdjustments": "Recommended roadmap adjustments"
-}
-
-Return ONLY valid JSON, no markdown formatting, no code blocks.`
-
   try {
+    const model = getModel()
+    const prompt = getProposalAnalysisPrompt({
+      proposalContent,
+      originalRoadmap,
+    })
     const result = await model.generateContent(prompt)
     const response = await result.response
     const text = response.text()
     
-    let cleanedText = text.trim()
-    if (cleanedText.startsWith('```json')) {
-      cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-    } else if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/```\n?/g, '')
-    }
-    
-    const analysis = JSON.parse(cleanedText)
-    return analysis
+    return parseProposalAnalysisResponse(text)
   } catch (error) {
     console.error('Error analyzing proposal:', error)
-    throw new Error('Failed to analyze proposal')
+    throw APIErrors.internalError('Failed to analyze proposal')
   }
 }
 
+/**
+ * Compare original roadmap with proposed roadmap
+ * Returns array of changed features
+ */
 export async function compareRoadmaps(originalRoadmap: any, proposedRoadmap: any) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
-
-  const prompt = `Compare the original roadmap vs the proposal. Return only the changed features.
-
-Original Roadmap: ${JSON.stringify(originalRoadmap, null, 2)}
-Proposed Roadmap: ${JSON.stringify(proposedRoadmap, null, 2)}
-
-Return a JSON array of changed features with the same structure as the original features array. Only include features that have changed.
-
-Return ONLY valid JSON, no markdown formatting, no code blocks.`
-
   try {
+    const model = getModel()
+    const prompt = getRoadmapComparisonPrompt({
+      originalRoadmap,
+      proposedRoadmap,
+    })
     const result = await model.generateContent(prompt)
     const response = await result.response
     const text = response.text()
     
-    let cleanedText = text.trim()
-    if (cleanedText.startsWith('```json')) {
-      cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-    } else if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/```\n?/g, '')
-    }
-    
-    const changes = JSON.parse(cleanedText)
-    return changes
+    return parseRoadmapComparisonResponse(text)
   } catch (error) {
     console.error('Error comparing roadmaps:', error)
-    throw new Error('Failed to compare roadmaps')
+    throw APIErrors.internalError('Failed to compare roadmaps')
   }
 }
 

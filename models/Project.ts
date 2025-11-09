@@ -1,50 +1,17 @@
-import mongoose, { Schema, Document, Types } from 'mongoose'
+import { BaseModel } from './base'
 
-export interface IProject extends Document {
+/**
+ * Project model - Represents a project in the system
+ * Extends BaseModel for consistent structure
+ */
+export interface Project extends BaseModel {
   name: string
   description: string
-  createdBy: Types.ObjectId
-  teamId: string
+  created_by: string
+  team_id: string
   roadmap: {
     summary: string
-    riskLevel: string
+    riskLevel: 'low' | 'medium' | 'high'
   }
-  createdAt: Date
 }
-
-const ProjectSchema = new Schema<IProject>({
-  name: {
-    type: String,
-    required: true,
-  },
-  description: {
-    type: String,
-    required: true,
-  },
-  createdBy: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-  teamId: {
-    type: String,
-    required: true,
-  },
-  roadmap: {
-    summary: {
-      type: String,
-      required: true,
-    },
-    riskLevel: {
-      type: String,
-      required: true,
-    },
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-})
-
-export default mongoose.models.Project || mongoose.model<IProject>('Project', ProjectSchema)
 

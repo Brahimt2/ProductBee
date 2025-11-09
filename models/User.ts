@@ -1,40 +1,14 @@
-import mongoose, { Schema, Document } from 'mongoose'
+import { BaseModel } from './base'
 
-export interface IUser extends Document {
-  auth0Id: string
-  name: string
+/**
+ * User model - Represents a user in the system
+ * Extends BaseModel for consistent structure
+ */
+export interface User extends BaseModel {
+  auth0_id: string
   email: string
-  role: 'pm' | 'engineer' | 'admin' | 'viewer'
-  createdAt: Date
+  name: string
+  role: 'admin' | 'pm' | 'engineer' | 'viewer'
+  team_id?: string
 }
-
-const UserSchema = new Schema<IUser>({
-  auth0Id: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
-  },
-  name: {
-    type: String,
-    required: true,
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  role: {
-    type: String,
-    enum: ['pm', 'engineer', 'admin', 'viewer'],
-    default: 'viewer',
-    required: true,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-})
-
-export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
 
