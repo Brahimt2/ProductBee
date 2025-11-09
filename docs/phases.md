@@ -64,9 +64,10 @@ When adding new constants:
 
 ## **Phase 11: AI-Powered Chatbot for Ticket Generation**
 
-**Status:** Complete ✅  
+**Status:** Removed ❌  
 **Dependencies:** Phase 6 (Jira-Style Tickets), Phase 9 (AI Assignment)  
-**Estimated Complexity:** High
+**Estimated Complexity:** High  
+**Note:** This feature has been removed. Frontend components and hooks have been deleted. Backend cleanup pending (see coordination request).
 
 ### Before Starting
 

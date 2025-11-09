@@ -317,57 +317,6 @@ Project endpoint now returns full timeline graph with all calculations.
 
 ---
 
-## 11. AI-Powered Chatbot for Ticket Generation (Phase 11)
-
-### Chat Types (`/types/chat.ts`)
-
-* `ChatMessage` - Message in conversation history (role, content, timestamp)
-* `ChatContext` - Chat context with projectId, conversationHistory, generatedTickets
-* `SuggestedTicket` - AI-suggested ticket with all fields and confidence score
-* `ChatResponse` - AI response with message and suggested tickets
-
-### Chatbot Prompts (`/lib/prompts/chatbot.ts`)
-
-* `getChatbotPrompt()` - Generate conversational prompt for ticket generation
-* `parseChatbotResponse()` - Parse and validate AI chatbot response
-* Supports conversational commands: "add auth to sprint 2", "change priority of ticket 3"
-* References existing features in project context
-* Suggests assignments based on engineer availability
-
-### Gemini Integration (`/lib/gemini.ts`)
-
-* `chatWithAI()` - Chat with AI for conversational ticket generation
-* Accepts conversation history + new message
-* Returns AI response + updated ticket suggestions
-* Handles errors gracefully with descriptive messages
-
-### API Routes
-
-**`POST /api/chat/generate-tickets`**
-* Accepts: projectId, message, conversationHistory (from localStorage)
-* Returns: AI response, suggested tickets (array), confidence scores
-* Requires: PM/Admin permissions
-* Enforces: Account isolation
-* Features:
-  - Understands conversational commands
-  - References existing features
-  - Suggests appropriate assignments
-  - Maintains conversation context
-
-**`POST /api/chat/apply-tickets`**
-* Accepts: projectId, tickets[] (from chat suggestions)
-* Bulk creates tickets with AI-suggested assignments
-* Returns: created ticket IDs
-* Requires: PM/Admin permissions
-* Enforces: Account isolation
-* Features:
-  - Bulk creates multiple tickets in single operation
-  - Automatically suggests assignments if not provided
-  - Validates dependencies against existing features
-  - Creates tickets with all Jira-style fields
-
----
-
 ## 12. Drag-and-Drop with Two-Way Confirmation (Phase 12)
 
 ### PendingChange Model (`/models/PendingChange.ts`)
@@ -686,22 +635,6 @@ try {
 }
 ```
 
-**Chat Pattern (Phase 11):**
-```ts
-import { chatWithAI } from '@/lib/gemini'
-import type { ChatMessage } from '@/types/chat'
-
-const chatResponse = await chatWithAI({
-  projectId: 'uuid',
-  projectName: 'Project Name',
-  projectDescription: 'Project description',
-  message: 'Add authentication feature',
-  conversationHistory: [] as ChatMessage[],
-  existingFeatures: [],
-  availableEngineers: [],
-})
-// chatResponse contains: message, suggestedTickets, confidenceScores
-```
 
 ## Common Patterns
 

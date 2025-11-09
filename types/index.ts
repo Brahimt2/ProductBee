@@ -6,4 +6,4 @@ export * from './api'
 export * from './database'
 export * from './feedback'
 export * from './roadmap'
-export * from './chat'
+// Chat types removed - chat feature deprecated

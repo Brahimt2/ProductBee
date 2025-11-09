@@ -775,7 +775,10 @@ export function ProjectDetailClient({ project, user }) {
 
 # **12. Phase 11 — AI-Powered Chatbot for Ticket Generation**
 
-## **Components Created**
+**Status:** Removed ❌  
+**Note:** This feature has been removed. All frontend components, hooks, and integrations have been deleted. Backend cleanup pending (see coordination request in `/docs/coordination/`).
+
+## **Components Created (REMOVED)**
 
 ### **ChatInterface** (`/components/project/ChatInterface.tsx`)
 

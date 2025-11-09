@@ -292,57 +292,6 @@ export interface SuggestAssigneeResponse {
   suggestion: AssignmentSuggestion
 }
 
-// Chat API Types (Phase 11)
-export interface GenerateTicketsRequest {
-  projectId: string
-  message: string
-  conversationHistory?: Array<{
-    role: 'user' | 'assistant'
-    content: string
-    timestamp: string
-  }>
-}
-
-export interface GenerateTicketsResponse {
-  message: string
-  suggestedTickets: Array<{
-    title: string
-    description: string
-    priority: 'critical' | 'high' | 'medium' | 'low'
-    effortEstimateWeeks: number
-    ticketType?: 'feature' | 'bug' | 'epic' | 'story'
-    storyPoints?: number | null
-    labels?: string[]
-    acceptanceCriteria?: string | null
-    dependsOn?: string[]
-    assignedTo?: string | null
-    confidenceScore?: number
-  }>
-  confidenceScores?: number[]
-}
-
-export interface ApplyTicketsRequest {
-  projectId: string
-  tickets: Array<{
-    title: string
-    description: string
-    priority: 'critical' | 'high' | 'medium' | 'low'
-    effortEstimateWeeks: number
-    ticketType?: 'feature' | 'bug' | 'epic' | 'story'
-    storyPoints?: number | null
-    labels?: string[]
-    acceptanceCriteria?: string | null
-    dependsOn?: string[]
-    assignedTo?: string | null
-    confidenceScore?: number
-  }>
-}
-
-export interface ApplyTicketsResponse {
-  createdTicketIds: string[]
-  message: string
-}
-
 // Pending Change API Types (Phase 12)
 export interface ProposeStatusChangeRequest {
   newStatus: 'not_started' | 'in_progress' | 'blocked' | 'complete'

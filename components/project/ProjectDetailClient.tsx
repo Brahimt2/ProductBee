@@ -32,8 +32,6 @@ import FeatureModal from './FeatureModal'
 import TicketCreateForm from './TicketCreateForm'
 import GanttView from './GanttView'
 import ViewToggle, { type ViewType } from './ViewToggle'
-import ChatInterface from './ChatInterface'
-import TicketGenerationControls from './TicketGenerationControls'
 import PendingChangesNotification from './PendingChangesNotification'
 import PendingChangesList from '@/components/modals/PendingChangesList'
 import UserStoriesTab from './UserStoriesTab'
@@ -359,28 +357,7 @@ export default function ProjectDetailClient({
               {displayData.project.roadmap.riskLevel} Risk
             </span>
           </div>
-
-          {/* AI Chat Interface - Claude Style */}
-          {isPMOrAdmin && (
-            <ChatInterface
-              projectId={projectId}
-              roadmapSummary={displayData.project.roadmap.summary}
-              onTicketsGenerated={() => {
-                refetch()
-              }}
-            />
-          )}
         </div>
-
-        {/* AI Ticket Generation Controls */}
-        {isPMOrAdmin && (
-          <TicketGenerationControls
-            projectId={projectId}
-            onTicketsApplied={() => {
-              refetch()
-            }}
-          />
-        )}
 
         {/* View Toggle and Actions */}
         {currentView !== 'user-stories' && (
