@@ -1,0 +1,292 @@
+# Development Phases
+
+## Instructions
+- Mark tasks complete as you go: `- [ ]` → `- [x]`
+- Create feature documentation in `/docs/features/[agent]/` after completing each phase
+- Update summary files: `/docs/backend/summary.md` and `/docs/frontend/summary.md`
+
+## For Backend Agent
+1. Work through BACKEND sections
+2. Create feature docs in `/docs/features/backend/` after completing each phase
+3. Update `/docs/backend/summary.md` with completed features
+4. Notify Frontend Agent when phase is complete
+
+## For Frontend Agent
+1. Work through FRONTEND sections
+2. After Backend completes a phase, READ their code changes and feature docs
+3. Then mark off your tasks
+4. Create feature docs in `/docs/features/frontend/` after completing each phase
+5. Update `/docs/frontend/summary.md` with completed features
+
+## Phase Status
+
+### Phase 1: Infrastructure Setup
+**Status:** ✅ Completed
+
+**BACKEND:**
+- [x] Create `/lib/constants.ts` with all constants
+- [x] Create `/models/` TypeScript interfaces (base, User, Project, Feature, Feedback)
+- [x] Create `/lib/api/` utilities (permissions, validation, errors)
+- [x] Reorganize `/lib/prompts/` (roadmap, feedback, comparison)
+- [x] Refactor `gemini.ts` to use modular prompts
+- [x] Create `/types/` TypeScript types (index, api, database, feedback, roadmap)
+
+**FRONTEND:**
+- [x] Reorganize components into feature folders
+- [x] Create custom hooks (`useProject`, `useFeature`, `useFeedback`)
+- [x] Update TypeScript types usage
+- [x] Implement server/client component patterns
+
+### Phase 2: API Routes & Error Handling
+**Status:** ✅ Completed
+
+**BACKEND:**
+- [x] Implement all API routes with consistent error handling
+- [x] Add comprehensive error logging and handling
+- [x] Implement validation utilities
+- [x] Implement permission checks
+- [x] Enhance Gemini integration error handling
+
+**FRONTEND:**
+- [x] Fix API response wrapper handling
+- [x] Update all API calls to handle response format
+- [x] Improve error handling in components
+- [x] Add real-time Supabase subscriptions
+
+### Phase 3: Documentation & Alignment
+**Status:** ✅ Completed
+
+**BACKEND:**
+- [x] Document all API endpoints in `/docs/api.md`
+- [x] Create backend summary in `/docs/backend/summary.md`
+- [x] Align documentation with architecture
+
+**FRONTEND:**
+- [x] Create frontend summary in `/docs/frontend/summary.md`
+- [x] Document component structure
+- [x] Document hooks usage
+- [x] Align documentation with architecture
+
+
+# ## **Phase 4: Account Isolation & Permission Enforcement**
+
+Ensure users can only access data belonging to their accountId.
+Enforce role-based permissions on every backend route.
+### **BACKEND**
+
+* [ ] Add `accountId` / `organizationId` to all models:
+
+  * [ ] User
+  * [ ] Project
+  * [ ] Feature
+  * [ ] Feedback
+* [ ] Add middleware to extract `accountId` from Auth0 metadata
+* [ ] Update all Supabase queries to enforce account scoping
+* [ ] Implement permission rules in `/lib/api/permissions.ts`:
+
+  * [ ] `canViewProject`
+  * [ ] `canEditProject`
+  * [ ] `canAssignTasks`
+  * [ ] `canApproveProposals`
+  * [ ] Role-based checks for PM / Engineer / Viewer
+* [ ] Add permission enforcement to **every route**
+* [ ] Test cross-account access isolation
+
+### **FRONTEND**
+
+* [ ] Add role-based UI rendering:
+
+  * [ ] Hide PM-only actions from non-PMs
+  * [ ] Hide assignment features from non-PMs
+  * [ ] Viewer = read-only UI
+* [ ] Add permission-aware guards before API calls
+* [ ] Show helpful permission error messages
+
+
+# ## **Phase 5: User Roles & Team Management**
+Allow each user to set and update their role + specialization.
+Provide an API and UI to list all team members with their assigned roles.
+### **BACKEND**
+
+* [ ] Extend User model with:
+
+  * [ ] `role` (PM, Engineer, Viewer)
+  * [ ] `specialization` (Backend, Frontend, QA, DevOps)
+  * [ ] `vacationDates`
+  * [ ] `currentTicketCount`
+  * [ ] `currentStoryPointCount`
+* [ ] Add specialization enum to constants
+* [ ] Create:
+
+  * [ ] `GET /api/user/profile`
+  * [ ] `PATCH /api/user/profile`
+  * [ ] `GET /api/team/members`
+* [ ] Limit profile updates to the current user
+* [ ] Add full documentation in `/docs/api.md`
+
+### **FRONTEND**
+
+* [ ] Create role onboarding screen:
+
+  * [ ] `/onboarding` or `/profile`
+  * [ ] PM vs Engineer selector
+  * [ ] Specialization dropdown for Engineers
+* [ ] Redirect user to onboarding until role is set
+* [ ] Create TeamMembersList with roles + specialization
+
+---
+
+# ## **Phase 6: Jira-Style Ticket Model Expansion**
+Support manual creation of tickets with story points, labels, type, and acceptance criteria.
+Accept and store expanded ticket fields in AI-generated roadmaps.
+### **BACKEND**
+
+* [ ] Extend Feature model with:
+
+  * [ ] `assignedTo`
+  * [ ] `reporter`
+  * [ ] `storyPoints`
+  * [ ] `labels[]`
+  * [ ] `acceptanceCriteria`
+  * [ ] `ticketType` (feature, bug, epic, story)
+* [ ] Update `POST /api/roadmap/generate` to include these fields
+* [ ] Update Gemini prompts to understand Jira-style fields
+* [ ] Add `POST /api/feature/create` for manual ticket creation
+
+### **FRONTEND**
+
+* [ ] Expand CreateProjectModal:
+
+  * [ ] Priority selector
+  * [ ] Estimated effort
+  * [ ] Labels/tags
+* [ ] Create TicketCreateForm:
+
+  * [ ] Ticket type dropdown
+  * [ ] Assignment dropdown
+  * [ ] Story points
+  * [ ] Acceptance criteria
+  * [ ] Labels
+  * [ ] Reporter auto-filled
+* [ ] Add validation for all fields
+
+---
+
+# ## **Phase 7: Gantt Chart & Timeline View**
+Return correctly calculated timeline data (dates, dependencies, critical path) from backend.
+Display a fully interactive Gantt chart with view switching on frontend.
+### **BACKEND**
+
+* [ ] Ensure Feature model has:
+
+  * [ ] `startDate`
+  * [ ] `endDate`
+  * [ ] `duration`
+* [ ] Extend `GET /api/project/[id]` to return:
+
+  * [ ] Sorted features by start date
+  * [ ] Dependency chains
+  * [ ] Critical path information
+* [ ] Create timeline calculation helper:
+
+  * [ ] Durations
+  * [ ] Overlaps
+  * [ ] Milestones
+
+### **FRONTEND**
+
+* [ ] Install Gantt library (`gantt-task-react` or `dhtmlx-gantt`)
+* [ ] Create GanttView component:
+
+  * [ ] Feature bars
+  * [ ] Dependencies
+  * [ ] Colors by priority
+  * [ ] Click → open FeatureModal
+  * [ ] Hover → tooltip
+* [ ] Create ViewToggle for Gantt vs Backlog
+* [ ] Make Gantt the default view
+* [ ] Save view preference in localStorage
+* [ ] Integrate into ProjectDetailClient
+
+
+# ## **Phase 8: Enhanced Team Workload & Assignment List**
+Return team members with workload metrics (tickets, story points, vacation status).
+Display a searchable, clear assignment dropdown reflecting workload and specialization.
+### **BACKEND**
+
+* [ ] Ensure `GET /api/team/members` returns:
+
+  * [ ] Role badges
+  * [ ] Specialization
+  * [ ] Story point count
+  * [ ] Ticket count
+  * [ ] Vacation status
+* [ ] Create `GET /api/team/members/available` to exclude vacationing users
+
+### **FRONTEND**
+
+* [ ] Create EmployeeAssignmentDropdown:
+
+  * [ ] Role badges
+  * [ ] Specialization grouping
+  * [ ] Workload summary
+  * [ ] Vacation indicator
+  * [ ] Search/filter
+* [ ] Integrate into TicketCreateForm + FeatureModal
+
+
+# ## **Phase 9: AI Smart Assignment Suggestions**
+Backend generates ranked assignee recommendations using task + workload data.
+Frontend allows user to request and apply AI assignment suggestions.
+### **BACKEND**
+
+* [ ] Create `/lib/ai/assignment.ts`
+* [ ] Implement `suggestAssignment()` using:
+
+  * [ ] Task description
+  * [ ] Required specialization
+  * [ ] Developer workload
+  * [ ] Vacation schedules
+  * [ ] Past assignment history
+* [ ] Create `POST /api/feature/suggest-assignee`
+* [ ] Integrate with Gemini:
+
+  * [ ] Analyze project history
+  * [ ] Infer required specialization
+  * [ ] Rank top engineers with reasoning
+
+### **FRONTEND**
+
+* [ ] Add “AI Suggestion” button inside assignment dropdown
+* [ ] Display:
+
+  * [ ] Top 3 recommended assignees
+  * [ ] Reasoning
+  * [ ] Confidence score
+* [ ] Manual override option
+* [ ] Autosuggest based on description typing (debounced)
+
+---
+
+# ## **Phase 10: Feedback & Proposal System**
+Store and manage feedback threads and proposal approvals per feature.
+Enable PMs to review and compare proposals with AI-generated summaries.
+### **BACKEND**
+
+* [ ] Create Feedback model
+* [ ] Add feedback prompts under `/lib/prompts/feedback.ts`
+* [ ] Add comparison prompts under `/lib/prompts/comparison.ts`
+* [ ] Implement `analyzeFeedback()` in Gemini wrapper
+* [ ] Create endpoints:
+
+  * [ ] `POST /api/feedback/create`
+  * [ ] `POST /api/feedback/approve` (PM only)
+  * [ ] `POST /api/feedback/reject` (PM only)
+* [ ] Ensure feedback respects account isolation
+
+### **FRONTEND**
+
+* [ ] Create FeedbackThread component
+* [ ] Add feedback section in FeatureModal
+* [ ] Build CommentForm + ProposalForm
+* [ ] Build side-by-side ProposalApprovalView
