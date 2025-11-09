@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
 import { createServerClient } from '@/lib/supabase'
 import { getUserFromSession, requireProjectAccess } from '@/lib/api/permissions'
-import { validateUUID } from '@/lib/api/validation'
+import { validateUUID, priorityToApi, statusToApi, feedbackTypeToApi } from '@/lib/api/validation'
 import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
 import { calculateTimeline } from '@/lib/api/timeline'
 import type { GetProjectResponse } from '@/types/api'
@@ -71,7 +71,7 @@ export async function GET(
       throw APIErrors.internalError('Failed to fetch feedback')
     }
 
-    // Group feedback by feature
+    // Group feedback by feature (convert DB format to API format using constants)
     const feedbackByFeature: Record<string, any[]> = {}
     feedback?.forEach((fb: any) => {
       const featureId = fb.feature_id
@@ -88,7 +88,7 @@ export async function GET(
           name: fb.user_id.name,
           email: fb.user_id.email,
         } : null,
-        type: fb.type,
+        type: feedbackTypeToApi(fb.type), // Convert DB -> API using constants
         content: fb.content,
         proposedRoadmap: fb.proposed_roadmap,
         aiAnalysis: fb.ai_analysis,
@@ -112,7 +112,7 @@ export async function GET(
       } : null,
     }
 
-    // Convert database features to Feature model format
+    // Convert database features to Feature model format (using constants)
     const featureModels: Feature[] = (features || []).map((feature) => ({
       id: feature.id,
       created_at: feature.created_at,
@@ -121,12 +121,8 @@ export async function GET(
       account_id: feature.account_id,
       title: feature.title,
       description: feature.description,
-      status: feature.status === 'backlog' ? 'not_started' : 
-              feature.status === 'active' ? 'in_progress' : 
-              feature.status as 'not_started' | 'in_progress' | 'blocked' | 'complete',
-      priority: feature.priority === 'P0' ? 'critical' :
-                feature.priority === 'P1' ? 'high' :
-                feature.priority === 'P2' ? 'medium' : 'low',
+      status: statusToApi(feature.status), // Convert DB -> API using constants
+      priority: priorityToApi(feature.priority), // Convert DB -> API using constants
       dependencies: feature.depends_on || [],
       estimated_effort_weeks: feature.effort_estimate_weeks,
       assigned_to: feature.assigned_to || null,

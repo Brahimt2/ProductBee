@@ -1,17 +1,12 @@
-# Backend Summary
+# ✅ Completed Features 
 
-## Overview
-This document summarizes all backend work completed for the AI Roadmap Dashboard, including infrastructure setup, API routes, error handling, and integration with Supabase and Gemini AI.
+## 1. Backend Infrastructure
 
-## Completed Features
+### BaseModel Pattern
 
-### 1. ✅ Backend Infrastructure
+All models extend:
 
-#### BaseModel Pattern
-**Location:** `/models/base.ts`
-
-All models extend the `BaseModel` interface to ensure consistent structure:
-```typescript
+```ts
 interface BaseModel {
   id: string
   created_at: string
@@ -19,714 +14,558 @@ interface BaseModel {
 }
 ```
 
-#### Model Interfaces
-**Location:** `/models/`
+### Models
 
-- `User.ts` - User model with Auth0 integration and role-based access
-- `Project.ts` - Project model with roadmap data (summary, riskLevel)
-- `Feature.ts` - Feature model with dependencies, status, priority, and effort estimates
-- `Feedback.ts` - Feedback model with AI analysis for proposals
+`User`, `Project`, `Feature`, `Feedback` with:
 
-#### Constants
-**Location:** `/lib/constants.ts`
+* account_id scoping
+* roadmap data
+* Jira-style ticket fields
+* feedback analysis fields
 
-Centralized constants for:
-- User roles: `admin`, `pm`, `engineer`, `viewer`
-- Feature statuses: `not_started`, `in_progress`, `blocked`, `complete` (with DB mapping for `backlog`, `active`)
-- Priority levels: `critical`, `high`, `medium`, `low` (with DB mapping for `P0`, `P1`, `P2`)
-- Feedback statuses: `pending`, `approved`, `rejected`, `discussion`
-- Feedback types: `comment`, `timeline_proposal` (with DB mapping for `proposal`)
-- Risk levels: `low`, `medium`, `high`
-- HTTP status codes
+### Constants (`/lib/constants.ts`)
 
-**Note:** Constants include both API-level values and database-level mappings to handle differences between API contracts and database schema.
+* Roles: admin, pm, engineer, viewer
+* FeatureStatus
+* PriorityLevels
+* FeedbackStatus + Type
+* RiskLevels
+* Specializations
+* TicketTypes
+* DB mappings for all enums
 
-#### API Utilities
-**Location:** `/lib/api/`
+### API Utilities (`/lib/api/`)
 
-**`permissions.ts`**
-- `getUserFromSession()` - Get or create user from Auth0 session
-- `requireRole()` - Require user to have specific role
-- `requirePMOrAdmin()` - Require PM or admin role
-- `requireProjectAccess()` - Check project access permissions
+#### Permissions (`/lib/api/permissions.ts`)
 
-**`validation.ts`**
-- `validateUUID()` - Validate UUID format
-- `validateRequired()` - Validate required fields
-- `validateEmail()` - Validate email format
-- `validateRole()` - Validate user role
-- `validateFeatureStatus()` - Validate feature status
-- `validatePriority()` - Validate priority level
-- `validateFeedbackType()` - Validate feedback type
-- `validateJsonBody()` - Validate and parse JSON body
+**User Session:**
+- `extractAccountIdFromSession(session): string` - Extract account_id from Auth0 session
+- `getUserFromSession(session): Promise<User>` - Get or create user from session
 
-**`errors.ts`**
-- `APIError` - Custom error class with status codes
-- `APIErrors` - Predefined error instances (unauthorized, forbidden, notFound, badRequest, internalError)
-- `handleError()` - Error handler for API routes
-- `successResponse()` - Success response helper with consistent format
+**Role Checks:**
+- `hasRole(user, requiredRoles): boolean` - Check if user has required role
+- `requireRole(user, requiredRoles): void` - Throw if user doesn't have required role
+- `isPMOrAdmin(user): boolean` - Check if user is PM or Admin
+- `requirePMOrAdmin(user): void` - Throw if not PM or Admin
 
-#### Prompts Organization
-**Location:** `/lib/prompts/`
+**Project Access:**
+- `canViewProject(user, projectId): Promise<boolean>` - Check view access
+- `canEditProject(user, projectId): Promise<boolean>` - Check edit access
+- `canAssignTasks(user, projectId): Promise<boolean>` - Check task assignment permission
+- `canApproveProposals(user, projectId): Promise<boolean>` - Check proposal approval permission
+- `requireProjectAccess(user, projectId): Promise<void>` - Throw if no access
+- `requireProjectEdit(user, projectId): Promise<void>` - Throw if cannot edit
+- `requireTaskAssignment(user, projectId): Promise<void>` - Throw if cannot assign
+- `requireProposalApproval(user, projectId): Promise<void>` - Throw if cannot approve
 
-- `roadmap.ts` - Roadmap generation prompts with JSON schema validation
-- `feedback.ts` - Feedback analysis prompts for engineer proposals
-- `comparison.ts` - Roadmap comparison prompts
+**Ownership:**
+- `isOwner(user, resourceCreatedBy): boolean` - Check if user owns resource
+- `requireOwnerOrAdmin(user, resourceCreatedBy): void` - Throw if not owner or admin
 
-#### Gemini Integration
-**Location:** `/lib/gemini.ts`
+#### Validation (`/lib/api/validation.ts`)
 
-Refactored to use modular prompts from `/lib/prompts/`. Functions:
-- `generateRoadmap()` - Generate roadmap from project description using Gemini AI
-- `analyzeProposal()` - Analyze engineer proposal for timeline changes
-- `compareRoadmaps()` - Compare original and proposed roadmaps
+**Basic Validation:**
+- `validateUUID(id, fieldName): void` - Validate UUID format
+- `validateRequired(data, fields[]): void` - Check required fields
+- `validateEmail(email): void` - Validate email format
+- `validateJsonBody<T>(request): Promise<T>` - Parse and validate JSON body
+- `sanitizeString(input): string` - Basic XSS prevention (removes < >)
 
-**Model Configuration:** Uses `gemini-2.0-flash-lite` by default for better performance and availability.
+**Domain Validation:**
+- `validateRole(role): void` - Validate user role
+- `validateSpecialization(spec): void` - Validate engineer specialization
+- `validateVacationDates(dates): void` - Validate vacation date ranges
+- `validateFeatureStatus(status): void` - Validate feature status (DB format)
+- `validateFeatureStatusApi(status): void` - Validate feature status (API format)
+- `validatePriority(priority): void` - Validate priority (API format)
+- `validateFeedbackType(type): void` - Validate feedback type (API format)
+- `validateFeedbackStatus(status): void` - Validate feedback status
+- `validateTicketType(type): void` - Validate Jira ticket type
+- `validateStoryPoints(points): void` - Validate story points (non-negative integer)
+- `validateLabels(labels): void` - Validate labels array
+- `validateRiskLevel(level): void` - Validate risk level
 
-#### TypeScript Types
-**Location:** `/types/`
+**Format Conversion (Critical for DB/API translation):**
+- `priorityToDb(apiPriority): string` - Convert API priority to DB format (`critical` → `P0`)
+- `priorityToApi(dbPriority): string` - Convert DB priority to API format (`P0` → `critical`)
+- `statusToDb(apiStatus): string` - Convert API status to DB format (`not_started` → `backlog`)
+- `statusToApi(dbStatus): string` - Convert DB status to API format (`backlog` → `not_started`)
+- `feedbackTypeToDb(apiType): string` - Convert API feedback type to DB format (`timeline_proposal` → `proposal`)
+- `feedbackTypeToApi(dbType): string` - Convert DB feedback type to API format (`proposal` → `timeline_proposal`)
 
-- `index.ts` - Central export for all types
-- `api.ts` - API request/response types (`APIResponse<T>`, `GetProjectsResponse`, `GetProjectResponse`, etc.)
-- `database.ts` - Database schema types (Supabase table types)
-- `feedback.ts` - Feedback-related types (analysis structures)
-- `roadmap.ts` - Roadmap-related types (backward compatibility)
+#### Errors (`/lib/api/errors.ts`)
 
-### 2. ✅ Error Handling Improvements
+**Error Class:**
+- `APIError` - Custom error class with statusCode and code
 
-#### Enhanced Error Handling
-**Location:** `/lib/gemini.ts`, `/lib/prompts/roadmap.ts`, `/app/api/roadmap/generate/route.ts`
+**Predefined Errors:**
+- `APIErrors.unauthorized()` - 401 UNAUTHORIZED
+- `APIErrors.forbidden(message?)` - 403 FORBIDDEN
+- `APIErrors.notFound(resource?)` - 404 NOT_FOUND
+- `APIErrors.badRequest(message)` - 400 BAD_REQUEST
+- `APIErrors.internalError(message?)` - 500 INTERNAL_ERROR
 
-**Improvements:**
-- Comprehensive error logging with detailed error information
-- Preserved original error messages instead of replacing them
-- Specific error handling for common Gemini API errors:
-  - API key issues
-  - Quota/rate limiting
-  - Model availability
-- Validation for empty responses and blocked responses
-- Input validation before API calls
+**Helpers:**
+- `handleError(error): Response` - Convert error to JSON response
+- `successResponse<T>(data, status?): Response` - Create success response
 
-#### Enhanced Roadmap Response Parsing
-**Location:** `/lib/prompts/roadmap.ts`
+### Prompts (`/lib/prompts/`)
 
-**Improvements:**
-- Validation for response structure
-- Validation for each feature in the roadmap
-- Enhanced error messages with specific validation failures
-- Logging of response text when parsing fails
+* roadmap, feedback, comparison, assignment
 
-#### Enhanced API Route Logging
-**Location:** `/app/api/roadmap/generate/route.ts`
+### Gemini Integration (`/lib/gemini.ts`)
 
-**Improvements:**
-- Detailed logging at each step of the process
-- Logged user information, project details, and roadmap data
-- Improved error handling to preserve error details
-- Checks for APIError instances vs generic errors
+* `generateRoadmap`
+* `analyzeProposal`
+* `compareRoadmaps`
+* `suggestAssignment`
 
-### 3. ✅ API Routes
+### Types
 
-**Location:** `/app/api/`
+API responses, DB schema, roadmap types, feedback types, team types.
 
-All routes use:
-- Consistent error handling with `handleError()` and `successResponse()`
-- Validation utilities from `/lib/api/validation.ts`
-- Permission checks from `/lib/api/permissions.ts`
-- Type-safe responses with TypeScript
+---
 
-#### Route List:
+## 2. Error Handling Enhancements
 
-**Projects**
-- `GET /api/projects` - Get all projects the user has access to
-- `GET /api/project/:id` - Get project by ID with features and feedback
+* Centralized error formatting
+* Preserved error messages
+* Gemini error patterns handled
+* Validation on AI JSON structure
+* API-consistent response wrapper:
 
-**Roadmap**
-- `POST /api/roadmap/generate` - Generate roadmap for a new project using AI
+```ts
+{ success: boolean; data?: T; error?: string; code?: string }
+```
 
-**Features**
-- `PATCH /api/feature/:id` - Update feature properties (status, priority, title, description, effort estimate, dependencies)
+---
 
-**Feedback**
-- `POST /api/feedback/create` - Create feedback (comment or timeline proposal)
-- `POST /api/feedback/approve` - Approve feedback proposal (PM/admin only)
-- `POST /api/feedback/reject` - Reject feedback proposal (PM/admin only)
+## 3. API Routes
 
-**Auth**
-- `GET/POST /api/auth/[...auth0]` - Auth0 authentication routes
+### Projects
 
-### 4. ✅ Implementation Patterns
+* `GET /api/projects`
+* `GET /api/project/:id`
 
-#### Error Handling Pattern
-```typescript
-try {
-  // ... route logic
-  return successResponse(data)
-} catch (error) {
-  return handleError(error)
+### Roadmap
+
+* `POST /api/roadmap/generate`
+
+### Features
+
+* `PATCH /api/feature/:id`
+* `POST /api/feature/create`
+
+### Feedback
+
+* `POST /api/feedback/create`
+* `POST /api/feedback/approve`
+* `POST /api/feedback/reject`
+
+### Team / User
+
+* `GET /api/user/profile` / `PATCH /api/user/profile`
+* `GET /api/team/members`
+* `GET /api/team/members/available`
+
+### Assignment
+
+* `POST /api/feature/suggest-assignee`
+
+---
+
+## 4. Account Isolation & Permissions (Phase 4)
+
+### Account Isolation
+
+* Added `account_id` to all tables
+* Extracted from Auth0 session metadata
+* All queries filtered by `account_id`
+* All routes enforce scoping
+
+### Permission System
+
+* Viewer → read only
+* Engineer → feedback create
+* PM → edit project, assign tasks, approve proposals
+* Admin → full access
+* New helpers: `canViewProject`, `canEditProject`, `canAssignTasks`, `canApproveProposals`
+
+---
+
+## 5. User Roles & Team Management (Phase 5)
+
+* Specialization (Backend, Frontend, QA, DevOps)
+* Vacation date ranges (JSONB)
+* Workload metrics dynamically computed
+* Endpoints: `/api/user/profile`, `/api/team/members`
+
+---
+
+## 6. Jira-Style Ticket Model (Phase 6)
+
+Feature fields added:
+
+* `assigned_to`, `reporter`
+* `story_points`
+* `labels`
+* `acceptance_criteria`
+* `ticket_type` (feature/bug/epic/story)
+
+Validation: TicketType, StoryPoints, Labels
+
+Roadmap AI now outputs Jira-style fields.
+
+---
+
+## 7. Timeline Engine & Gantt (Phase 7)
+
+Feature timeline fields:
+
+* `start_date`, `end_date`, `duration`
+
+### Timeline Utilities (`/lib/api/timeline.ts`)
+
+**Main Function:**
+- `calculateTimeline(features: Feature[]): TimelineCalculation` - Complete timeline calculation
+
+**Core Functions:**
+- `calculateDuration(startDate, endDate): number` - Calculate days between dates
+- `calculateEndDate(startDate, durationDays): string` - Calculate end date from start + duration
+- `calculateStartDate(endDate, durationDays): string` - Calculate start date from end + duration
+- `checkOverlap(start1, end1, start2, end2): number` - Calculate overlap days between two date ranges
+
+**Dependency Analysis:**
+- `buildDependencyChains(features): DependencyChain[]` - Build dependency chains from features
+  - Detects circular dependencies
+  - Calculates chain depth
+  - Returns array of chains with feature IDs in order
+
+**Critical Path:**
+- `calculateCriticalPath(features): CriticalPath | null` - Calculate critical path using longest path algorithm
+  - Uses forward pass (earliest start/end) and backward pass (latest start/end)
+  - Identifies features where earliest = latest (critical path)
+  - Returns path array, total duration, start/end dates
+
+**Milestones:**
+- `calculateMilestones(features): Milestone[]` - Calculate milestones from feature completion dates
+  - Groups features by completion date
+  - Returns array with date, feature IDs, and description
+
+**Overlaps:**
+- `calculateOverlaps(features): Overlap[]` - Calculate overlaps between all feature pairs
+  - Returns array of feature pairs with overlap days
+
+**TimelineCalculation Interface:**
+```ts
+{
+  features: FeatureWithTimeline[]
+  dependencyChains: DependencyChain[]
+  criticalPath: CriticalPath | null
+  milestones: Milestone[]
+  overlaps: Overlap[]
 }
 ```
 
-#### Validation Pattern
-```typescript
-const body = await validateJsonBody<RequestType>(request)
-validateRequired(body, ['field1', 'field2'])
+Project endpoint now returns full timeline graph with all calculations.
+
+---
+
+## 8. Team Workload & Availability (Phase 8)
+
+### Workload Calculation (`/lib/api/workload.ts`)
+
+**Function:**
+- `calculateUserWorkload(userId, accountId): WorkloadMetrics` - Calculate user workload
+  - Queries features where `assigned_to = userId`
+  - Filters by `account_id` for account isolation
+  - Excludes completed features (`status != 'complete'`)
+  - Returns `{ ticketCount: number, storyPointCount: number }`
+
+**Vacation Check:**
+- `isUserOnVacation(vacationDates): boolean` - Check if user is currently on vacation
+  - Checks if today falls within any vacation date range
+  - Returns `true` if user is on vacation today
+
+**Endpoints:**
+* `/api/team/members` - Returns all members with workload metrics
+* `/api/team/members/available` - Filters out users currently on vacation
+
+---
+
+## 9. AI Smart Assignment Suggestions (Phase 9)
+
+* Gemini-powered ranking of best assignees
+* Inputs: task, specialization, workload, vacation, team context
+* Output: ranked list + reasoning + confidence
+* Endpoint: `/api/feature/suggest-assignee`
+
+---
+
+## 10. Feedback & Proposal System (Phase 10)
+
+* Feedback types: `comment`, `timeline_proposal`
+* AI analysis generated automatically
+* PM/Admin approval & rejection workflows
+* Roadmap diffs computed via Gemini on approval
+
+---
+
+## 11. AI-Powered Chatbot for Ticket Generation (Phase 11)
+
+### Chat Types (`/types/chat.ts`)
+
+* `ChatMessage` - Message in conversation history (role, content, timestamp)
+* `ChatContext` - Chat context with projectId, conversationHistory, generatedTickets
+* `SuggestedTicket` - AI-suggested ticket with all fields and confidence score
+* `ChatResponse` - AI response with message and suggested tickets
+
+### Chatbot Prompts (`/lib/prompts/chatbot.ts`)
+
+* `getChatbotPrompt()` - Generate conversational prompt for ticket generation
+* `parseChatbotResponse()` - Parse and validate AI chatbot response
+* Supports conversational commands: "add auth to sprint 2", "change priority of ticket 3"
+* References existing features in project context
+* Suggests assignments based on engineer availability
+
+### Gemini Integration (`/lib/gemini.ts`)
+
+* `chatWithAI()` - Chat with AI for conversational ticket generation
+* Accepts conversation history + new message
+* Returns AI response + updated ticket suggestions
+* Handles errors gracefully with descriptive messages
+
+### API Routes
+
+**`POST /api/chat/generate-tickets`**
+* Accepts: projectId, message, conversationHistory (from localStorage)
+* Returns: AI response, suggested tickets (array), confidence scores
+* Requires: PM/Admin permissions
+* Enforces: Account isolation
+* Features:
+  - Understands conversational commands
+  - References existing features
+  - Suggests appropriate assignments
+  - Maintains conversation context
+
+**`POST /api/chat/apply-tickets`**
+* Accepts: projectId, tickets[] (from chat suggestions)
+* Bulk creates tickets with AI-suggested assignments
+* Returns: created ticket IDs
+* Requires: PM/Admin permissions
+* Enforces: Account isolation
+* Features:
+  - Bulk creates multiple tickets in single operation
+  - Automatically suggests assignments if not provided
+  - Validates dependencies against existing features
+  - Creates tickets with all Jira-style fields
+
+---
+
+# ✅ Key Implementation Patterns (Keep for Agent Alignment)
+
+### Error Handling
+
+```ts
+try {
+  return successResponse(data)
+} catch (err) {
+  return handleError(err)
+}
+```
+
+### Validation
+
+```ts
+const body = await validateJsonBody<T>(req)
+validateRequired(body, ['field'])
 validateUUID(body.id, 'ID')
 ```
 
-#### Permission Pattern
-```typescript
+### Permission Checks
+
+```ts
 const user = await getUserFromSession(session)
 requirePMOrAdmin(user)
 await requireProjectAccess(user, projectId)
 ```
 
-#### API Response Format
-All responses follow this structure:
-```typescript
-{
-  success: boolean
-  data?: T
-  error?: string
-  code?: string
+### Account Isolation Pattern
+
+**Every database query must filter by account_id:**
+
+```ts
+const user = await getUserFromSession(session)
+const supabase = createServerClient()
+
+// ✅ CORRECT
+const { data } = await supabase
+  .from('projects')
+  .select('*')
+  .eq('account_id', user.account_id)
+
+// ❌ WRONG - Missing account_id filter
+const { data } = await supabase
+  .from('projects')
+  .select('*')
+```
+
+**Account ID Extraction:**
+- Extracted from Auth0 session metadata in this order:
+  1. `session.user.app_metadata.account_id` (preferred)
+  2. `session.user.user_metadata.account_id` (fallback)
+  3. `session.user.org_id` (if using Auth0 Organizations)
+  4. Generated from `auth0_id` + email domain (development fallback)
+
+### Format Conversion Pattern
+
+**Always use conversion functions when reading/writing to database:**
+
+```ts
+// Reading from database
+const dbStatus = feature.status // 'backlog'
+const apiStatus = statusToApi(dbStatus) // 'not_started'
+
+// Writing to database
+const apiPriority = body.priority // 'critical'
+const dbPriority = priorityToDb(apiPriority) // 'P0'
+await supabase.from('features').update({ priority: dbPriority })
+```
+
+**Critical:** Never hardcode DB values. Always use conversion functions.
+
+### AI Integration Patterns
+
+**Gemini Module (`/lib/gemini.ts`):**
+- Default model: `gemini-2.0-flash-lite`
+- All functions handle errors and return structured data
+
+**Error Handling:**
+- API key errors → `APIErrors.internalError('Invalid or missing Gemini API key...')`
+- Rate limiting → `APIErrors.internalError('Gemini API quota exceeded...')`
+- Model errors → `APIErrors.internalError('Gemini model not available...')`
+- Response blocking → Error with `blockedReason`
+- Empty responses → Error with descriptive message
+
+**Usage Pattern:**
+```ts
+import { generateRoadmap } from '@/lib/gemini'
+
+try {
+  const roadmapData = await generateRoadmap(projectName, projectDescription)
+  // Use roadmapData
+} catch (error) {
+  // Error already formatted as APIError
+  return handleError(error)
 }
 ```
 
-## Benefits
+**Chat Pattern (Phase 11):**
+```ts
+import { chatWithAI } from '@/lib/gemini'
+import type { ChatMessage } from '@/types/chat'
 
-1. **Type Safety** - Full TypeScript support with proper types across all layers
-2. **Consistency** - Unified error handling and response format
-3. **Security** - Centralized permission checks and validation
-4. **Maintainability** - Modular, organized code structure
-5. **Documentation** - Comprehensive API documentation in `/docs/api.md`
-6. **Debugging** - Enhanced error logging and detailed error messages
-7. **Scalability** - Clear separation of concerns and reusable utilities
-
-## Testing Recommendations
-
-All routes should be tested for:
-- Authentication (Auth0 session validation)
-- Authorization (role-based access control)
-- Validation (input validation and error cases)
-- Error handling (proper error responses)
-- Success responses (correct data structure)
-
-## Future Improvements
-
-1. Add rate limiting for API routes
-2. Add request logging middleware
-3. Add response caching for frequently accessed data
-4. Add API versioning
-5. Add OpenAPI/Swagger documentation
-6. Add retry logic for transient errors in Gemini API
-7. Add metrics/analytics for error tracking
-
-## File Structure
-
-```
-/lib
-  /api
-    - permissions.ts
-    - validation.ts
-    - errors.ts
-  /prompts
-    - roadmap.ts
-    - feedback.ts
-    - comparison.ts
-  - supabase.ts
-  - gemini.ts
-  - constants.ts
-
-/models
-  - base.ts
-  - User.ts
-  - Project.ts
-  - Feature.ts
-  - Feedback.ts
-
-/types
-  - index.ts
-  - api.ts
-  - database.ts
-  - feedback.ts
-  - roadmap.ts
-
-/app/api
-  /auth/[...auth0]
-    - route.ts
-  /projects
-    - route.ts
-  /project/[id]
-    - route.ts
-  /roadmap/generate
-    - route.ts
-  /feature/[id]
-    - route.ts
-  /feedback
-    /create
-      - route.ts
-    /approve
-      - route.ts
-    /reject
-      - route.ts
-
-/middleware.ts
+const chatResponse = await chatWithAI({
+  projectId: 'uuid',
+  projectName: 'Project Name',
+  projectDescription: 'Project description',
+  message: 'Add authentication feature',
+  conversationHistory: [] as ChatMessage[],
+  existingFeatures: [],
+  availableEngineers: [],
+})
+// chatResponse contains: message, suggestedTickets, confidenceScores
 ```
 
-### 4. ✅ Account Isolation & Permission Enforcement (Phase 4)
-
-#### Account Isolation
-**Location:** `/lib/api/permissions.ts`, all API routes, database schema
-
-**Implementation:**
-- Added `account_id` field to all models (User, Project, Feature, Feedback)
-- Updated database schema with `account_id` columns and indexes
-- Created `extractAccountIdFromSession()` function to extract accountId from Auth0 metadata:
-  - Checks `app_metadata.account_id` (preferred)
-  - Falls back to `user_metadata.account_id`
-  - Falls back to `org_id` (if using Auth0 Organizations)
-  - Generates accountId from email domain as final fallback
-- Updated `getUserFromSession()` to automatically set and update user's `account_id`
-- All database queries now filter by `account_id` to enforce account isolation
-- All API routes enforce account scoping in queries and updates
-
-#### Permission Functions
-**Location:** `/lib/api/permissions.ts`
-
-**New Functions:**
-- `canViewProject()` - Check if user can view a project (account isolation + role-based)
-- `canEditProject()` - Check if user can edit a project (PM/Admin only, within account)
-- `canAssignTasks()` - Check if user can assign tasks (PM/Admin only, within account)
-- `canApproveProposals()` - Check if user can approve proposals (PM/Admin only, within account)
-- `requireProjectEdit()` - Require user to be able to edit a project
-- `requireTaskAssignment()` - Require user to be able to assign tasks
-- `requireProposalApproval()` - Require user to be able to approve proposals
-
-**Permission Enforcement:**
-- All API routes now enforce account isolation
-- Role-based permissions enforced on all routes:
-  - **Viewer**: Read-only access to projects and features
-  - **Engineer**: Can view and create feedback
-  - **PM**: Can view, edit projects, assign tasks, approve/reject proposals
-  - **Admin**: Full access within their account
-- Cross-account access is prevented at the database query level
-
-#### API Route Updates
-**Location:** `/app/api/`
-
-**Updated Routes:**
-- `GET /api/projects` - Filters projects by `account_id`
-- `GET /api/project/:id` - Enforces account isolation for project, features, and feedback
-- `POST /api/roadmap/generate` - Creates projects and features with `account_id`
-- `PATCH /api/feature/:id` - Enforces account isolation on feature updates
-- `POST /api/feedback/create` - Creates feedback with `account_id`
-- `POST /api/feedback/approve` - Enforces account isolation and PM/Admin permissions
-- `POST /api/feedback/reject` - Enforces account isolation and PM/Admin permissions
-
-#### Database Schema Updates
-**Location:** `/supabase/schema.sql`
-
-**Changes:**
-- Added `account_id TEXT NOT NULL` to `users` table
-- Added `account_id TEXT NOT NULL` to `projects` table
-- Added `account_id TEXT NOT NULL` to `features` table
-- Added `account_id TEXT NOT NULL` to `feedback` table
-- Added indexes on `account_id` columns for performance
-
-#### Documentation Updates
-**Location:** `/docs/api.md`
-
-**Added:**
-- Account Isolation section explaining how accountId is extracted
-- Permission Enforcement section explaining role-based access
-- Updated all endpoint documentation with account isolation and permission details
-
-### 5. ✅ User Roles & Team Management (Phase 5)
-
-#### User Model Extensions
-**Location:** `/models/User.ts`
-
-**New Fields:**
-- `specialization` - Engineer specialization (Backend, Frontend, QA, DevOps) - nullable, only for engineers
-- `vacation_dates` - Array of vacation date ranges (JSONB) - nullable
-- `current_ticket_count` - Computed workload metric (not stored in DB)
-- `current_story_point_count` - Computed workload metric (not stored in DB)
-
-**New Types:**
-- `VacationDateRange` - Interface for vacation date ranges with start and end dates
-
-#### Constants Extensions
-**Location:** `/lib/constants.ts`
-
-**New Constants:**
-- `SPECIALIZATIONS` - Enum for user specializations (Backend, Frontend, QA, DevOps)
-- `Specialization` - Type for specialization values
-
-#### Database Schema Updates
-**Location:** `/supabase/schema.sql`, `/supabase/migration_add_user_fields.sql`
-
-**New Columns:**
-- `specialization TEXT` - Check constraint for valid specializations
-- `vacation_dates JSONB` - Array of vacation date ranges, default empty array
-- Indexes on `specialization` and `vacation_dates` for performance
-
-#### Validation Functions
-**Location:** `/lib/api/validation.ts`
-
-**New Functions:**
-- `validateSpecialization()` - Validates specialization values (Backend, Frontend, QA, DevOps)
-- `validateVacationDates()` - Validates vacation date ranges (array of {start, end} objects)
-
-#### Workload Calculation
-**Location:** `/lib/api/workload.ts`
-
-**New Functions:**
-- `calculateUserWorkload()` - Calculates workload metrics for a user (ticket count, story point count)
-- `isUserOnVacation()` - Checks if user is currently on vacation based on vacation dates
-
-**Note:** Workload calculation requires the `assignedTo` field on features (Phase 6). Currently returns 0 for all metrics until Phase 6 is implemented.
-
-#### API Routes
-**Location:** `/app/api/user/profile/route.ts`, `/app/api/team/members/route.ts`
-
-**New Endpoints:**
-- `GET /api/user/profile` - Get current user's profile with workload metrics
-- `PATCH /api/user/profile` - Update current user's profile (users can only update their own profile)
-- `GET /api/team/members` - Get all team members in the account with workload metrics and vacation status
-
-**Features:**
-- Account isolation enforced on all endpoints
-- Users can only update their own profile
-- Role and specialization validation
-- Vacation date validation
-- Workload metrics computed on-the-fly
-- Vacation status calculated based on current date
-
-#### API Types
-**Location:** `/types/api.ts`
-
-**New Types:**
-- `UserProfileResponse` - User profile with workload metrics
-- `GetUserProfileResponse` - Response for GET /api/user/profile
-- `UpdateUserProfileRequest` - Request body for PATCH /api/user/profile
-- `UpdateUserProfileResponse` - Response for PATCH /api/user/profile
-- `TeamMemberResponse` - Team member with workload metrics and vacation status
-- `GetTeamMembersResponse` - Response for GET /api/team/members
-
-#### Database Types
-**Location:** `/types/database.ts`
-
-**Updated Types:**
-- `DatabaseUser` - Added `specialization` and `vacation_dates` fields
-
-#### Documentation Updates
-**Location:** `/docs/api.md`
-
-**Added:**
-- User Profile section with GET and PATCH endpoints
-- Team Management section with GET /api/team/members endpoint
-- UserProfileResponse and TeamMemberResponse type definitions
-- Specializations section in Permissions
-- Validation rules for profile updates
-
-### 6. ✅ Jira-Style Ticket Model Expansion (Phase 6)
-
-#### Feature Model Extensions
-**Location:** `/models/Feature.ts`
-
-**New Fields:**
-- `assigned_to` - User ID of assigned engineer (nullable)
-- `reporter` - User ID of ticket reporter (nullable)
-- `story_points` - Story points estimate (nullable, integer)
-- `labels` - Array of label strings
-- `acceptance_criteria` - Acceptance criteria text (nullable)
-- `ticket_type` - Ticket type: 'feature', 'bug', 'epic', 'story' (defaults to 'feature')
-
-#### Constants Extensions
-**Location:** `/lib/constants.ts`
-
-**New Constants:**
-- `TICKET_TYPES` - Enum for ticket types (FEATURE, BUG, EPIC, STORY)
-- `TicketType` - Type for ticket type values
-
-#### Database Schema Updates
-**Location:** `/supabase/schema.sql`
-
-**New Columns:**
-- `assigned_to UUID` - Foreign key to users table (nullable, ON DELETE SET NULL)
-- `reporter UUID` - Foreign key to users table (nullable, ON DELETE SET NULL)
-- `story_points INTEGER` - Story points estimate (nullable)
-- `labels TEXT[]` - Array of label strings (default empty array)
-- `acceptance_criteria TEXT` - Acceptance criteria text (nullable)
-- `ticket_type TEXT` - Check constraint for valid ticket types (defaults to 'feature')
-
-**New Indexes:**
-- Index on `assigned_to` for workload queries
-- Index on `reporter` for reporting queries
-- Index on `ticket_type` for filtering
-- GIN index on `labels` for array searches
-
-#### Validation Functions
-**Location:** `/lib/api/validation.ts`
-
-**New Functions:**
-- `validateTicketType()` - Validates ticket type values (feature, bug, epic, story)
-- `validateStoryPoints()` - Validates story points (non-negative integer or null)
-- `validateLabels()` - Validates labels array (array of strings)
-
-#### Gemini Prompt Updates
-**Location:** `/lib/prompts/roadmap.ts`
-
-**Updates:**
-- Extended roadmap generation prompt to include Jira-style fields:
-  - `ticketType` - AI determines appropriate type (feature, epic, story, bug)
-  - `storyPoints` - AI estimates using Fibonacci-like scale
-  - `labels` - AI generates relevant labels based on feature content
-  - `acceptanceCriteria` - AI generates clear acceptance criteria
-- Enhanced validation to check all new fields in AI responses
-- Added guidance for AI on when to use each ticket type
-
-#### API Routes
-**Location:** `/app/api/`
-
-**New Endpoints:**
-- `POST /api/feature/create` - Create feature/ticket manually with all Jira-style fields
-
-**Updated Endpoints:**
-- `POST /api/roadmap/generate` - Now includes Jira-style fields in generated features:
-  - Sets `reporter` to the user creating the roadmap
-  - Includes AI-generated `ticketType`, `storyPoints`, `labels`, `acceptanceCriteria`
-  - `assignedTo` remains null (not assigned during generation)
-- `PATCH /api/feature/:id` - Now supports updating all Jira-style fields
-- `GET /api/project/:id` - Now returns all Jira-style fields in feature responses
-
-#### API Types
-**Location:** `/types/api.ts`
-
-**New Types:**
-- `CreateFeatureRequest` - Request body for POST /api/feature/create
-- `CreateFeatureResponse` - Response for POST /api/feature/create
-
-**Updated Types:**
-- `FeatureResponse` - Added all Jira-style fields (assignedTo, reporter, storyPoints, labels, acceptanceCriteria, ticketType)
-- `UpdateFeatureRequest` - Added all Jira-style fields for updates
-
-#### Documentation Updates
-**Location:** `/docs/api.md`
-
-**Added:**
-- Create Feature endpoint documentation with all Jira-style fields
-- Updated Update Feature endpoint documentation with new fields
-- Updated FeatureResponse type definition with Jira-style fields
-- Updated Generate Roadmap endpoint documentation explaining AI-generated Jira-style fields
-
-### 7. ✅ Gantt Chart & Timeline View (Phase 7)
-
-#### Timeline Fields
-**Location:** `/models/Feature.ts`, `/supabase/schema.sql`
-
-**New Fields:**
-- `start_date` - Start date for the feature (DATE, nullable)
-- `end_date` - End date for the feature (DATE, nullable)
-- `duration` - Duration in days (INTEGER, nullable)
-
-**Database Schema:**
-- Added `start_date DATE`, `end_date DATE`, `duration INTEGER` columns to `features` table
-- Added indexes on `start_date` and `end_date` for performance
-
-#### Timeline Calculation Helper
-**Location:** `/lib/api/timeline.ts`
-
-**Functions:**
-- `calculateDuration()` - Calculate duration in days between two dates
-- `calculateEndDate()` - Calculate end date from start date and duration
-- `calculateStartDate()` - Calculate start date from end date and duration
-- `checkOverlap()` - Check if two date ranges overlap
-- `buildDependencyChains()` - Build dependency chains from features
-- `calculateCriticalPath()` - Calculate critical path using longest path algorithm
-- `calculateMilestones()` - Calculate milestones from feature completion dates
-- `calculateOverlaps()` - Calculate overlaps between features
-- `calculateTimeline()` - Calculate complete timeline for a set of features
-
-**Features:**
-- Critical path calculation using forward and backward pass
-- Dependency chain analysis
-- Milestone detection
-- Overlap detection
-- Automatic duration calculation from effort estimates
-
-#### API Route Updates
-**Location:** `/app/api/project/[id]/route.ts`
-
-**Updates:**
-- Extended `GET /api/project/[id]` to return timeline data:
-  - Features sorted by start date
-  - Dependency chains with depth information
-  - Critical path with total duration and dates
-  - Milestones grouped by completion date
-  - Feature overlaps
-- Features now include timeline fields: `startDate`, `endDate`, `duration`, `isOnCriticalPath`, `slackDays`
-
-#### API Types
-**Location:** `/types/api.ts`
-
-**Updated Types:**
-- `FeatureResponse` - Added timeline fields (startDate, endDate, duration, isOnCriticalPath, slackDays)
-- `GetProjectResponse` - Added `timeline` object with dependencyChains, criticalPath, milestones, overlaps
-
-#### Documentation Updates
-**Location:** `/docs/api.md`
-
-**Added:**
-- Timeline data in Get Project endpoint documentation
-- FeatureResponse type definition with timeline fields
-- Explanation of critical path, dependency chains, milestones, and overlaps
-
-### 8. ✅ Enhanced Team Workload & Assignment List (Phase 8)
-
-#### Available Team Members Endpoint
-**Location:** `/app/api/team/members/available/route.ts`
-
-**New Endpoint:**
-- `GET /api/team/members/available` - Returns all available team members excluding users on vacation
-- Filters out users who are currently on vacation
-- Returns same structure as `/api/team/members` but excludes vacationing users
-
-#### Workload Calculation Fix
-**Location:** `/lib/api/workload.ts`
-
-**Updates:**
-- Updated `calculateUserWorkload()` to actually calculate workload from assigned features
-- Now queries features where `assigned_to = userId` and `status != 'complete'`
-- Calculates ticket count and story point count from actual data
-- Previously returned 0 for all metrics (waiting for Phase 6), now fully functional
-
-#### Documentation Updates
-**Location:** `/docs/api.md`
-
-**Added:**
-- Get Available Team Members endpoint documentation
-- Updated workload calculation notes to reflect Phase 6 completion
-
-### 9. ✅ AI Smart Assignment Suggestions (Phase 9)
-
-#### AI Assignment Module
-**Location:** `/lib/ai/assignment.ts`
-
-**Features:**
-- `suggestAssignment()` function that uses Gemini AI to recommend assignees
-- Analyzes task description, required specialization, developer workload, vacation schedules, and past assignment history
-- Returns ranked list of engineers with reasoning and confidence scores
-
-#### Assignment Prompts
-**Location:** `/lib/prompts/assignment.ts`
-
-**Features:**
-- `getAssignmentSuggestionPrompt()` - Generates comprehensive prompts for AI assignment suggestions
-- Includes task context, team member data, workload metrics, and specialization requirements
-- `parseAssignmentSuggestionResponse()` - Parses and validates AI response with ranked suggestions
-
-#### Gemini Integration
-**Location:** `/lib/gemini.ts`
-
-**Added:**
-- `suggestAssignment()` function that calls Gemini API with assignment prompt
-- Error handling for API failures
-- Logging for debugging
-
-#### API Endpoint
-**Location:** `/app/api/feature/suggest-assignee/route.ts`
-
-**New Endpoint:**
-- `POST /api/feature/suggest-assignee` - Returns AI-generated assignment suggestions
-- Accepts either `featureId` or manual task description
-- Analyzes project history to infer required specialization
-- Returns top 3 recommended engineers with reasoning and confidence scores
-- Enforces account isolation and project access permissions
-
-#### Documentation Updates
-**Location:** `/docs/api.md`
-
-**Added:**
-- Suggest Assignee endpoint documentation
-- Request/response type definitions
-- Examples for both featureId and manual description usage
-
-### 10. ✅ Feedback & Proposal System (Phase 10)
-
-#### Feedback Model
-**Location:** `/models/Feedback.ts`
-
-**Features:**
-- Extends BaseModel with account isolation
-- Supports two types: `'comment'` and `'timeline_proposal'`
-- Includes AI analysis field for proposal insights
-- Status tracking: `'pending'`, `'approved'`, `'rejected'`, `'discussion'`
-
-#### AI Prompts
-**Location:** `/lib/prompts/feedback.ts` and `/lib/prompts/comparison.ts`
-
-**Feedback Analysis:**
-- `getProposalAnalysisPrompt()` - Analyzes engineer proposals for timeline impact
-- Returns structured analysis with summary, timeline impact, and recommended adjustments
-- `parseProposalAnalysisResponse()` - Handles response parsing with markdown cleanup
-
-**Roadmap Comparison:**
-- `getRoadmapComparisonPrompt()` - Compares original vs proposed roadmaps
-- Returns only changed features as JSON array
-- `parseRoadmapComparisonResponse()` - Parses comparison results
-
-#### Gemini Integration
-**Location:** `/lib/gemini.ts`
-
-**Added:**
-- `analyzeProposal()` - Analyzes engineer proposals using Gemini AI
-- `compareRoadmaps()` - Compares roadmaps to identify changes during approval
-
-#### API Endpoints
-**Location:** `/app/api/feedback/`
-
-**New Endpoints:**
-- `POST /api/feedback/create` - Create feedback (comment or proposal)
-  - Automatically analyzes proposals with AI
-  - Enforces account isolation
-  - All authenticated users can create feedback
-  
-- `POST /api/feedback/approve` - Approve feedback proposal (PM/Admin only)
-  - Compares roadmaps if proposed roadmap exists
-  - Updates feedback status to 'approved'
-  - Enforces account isolation and role-based permissions
-  
-- `POST /api/feedback/reject` - Reject feedback proposal (PM/Admin only)
-  - Updates feedback status to 'rejected'
-  - Enforces account isolation and role-based permissions
-
-#### Permission Enforcement
-**Location:** `/lib/api/permissions.ts`
-
-**Added:**
-- `requireProposalApproval()` - Ensures user is PM or Admin before approving/rejecting proposals
-- Integrates with account isolation checks
-
-#### Documentation Updates
-**Location:** `/docs/api.md`
-
-**Added:**
-- All three feedback endpoints documented
-- Request/response type definitions
-- Permission requirements
-- Account isolation details
-- AI analysis explanation
-
-## Status
-✅ **Backend infrastructure completed successfully**
-✅ **Phase 4: Account Isolation & Permission Enforcement completed**
-✅ **Phase 5: User Roles & Team Management completed**
-✅ **Phase 6: Jira-Style Ticket Model Expansion completed**
-✅ **Phase 7: Gantt Chart & Timeline View completed**
-✅ **Phase 8: Enhanced Team Workload & Assignment List completed**
-✅ **Phase 9: AI Smart Assignment Suggestions completed**
-✅ **Phase 10: Feedback & Proposal System completed**
-
-All backend work is complete and documented. The system includes robust error handling, type safety, permission checks, account isolation, user roles, team management, Jira-style ticket fields, timeline calculations, critical path analysis, AI-powered assignment suggestions, feedback and proposal management, and comprehensive API routes for the AI Roadmap Dashboard.
-
+## Common Patterns
+
+### Complete API Route Pattern
+
+```ts
+import { NextRequest } from 'next/server'
+import { getSession } from '@auth0/nextjs-auth0'
+import { createServerClient } from '@/lib/supabase'
+import { getUserFromSession, requirePMOrAdmin, requireProjectAccess } from '@/lib/api/permissions'
+import { validateJsonBody, validateRequired, validateUUID } from '@/lib/api/validation'
+import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
+import { statusToDb, priorityToDb } from '@/lib/api/validation'
+
+export async function POST(request: NextRequest) {
+  try {
+    // 1. Get session and user
+    const session = await getSession()
+    const user = await getUserFromSession(session)
+
+    // 2. Validate permissions
+    requirePMOrAdmin(user)
+
+    // 3. Validate request body
+    const body = await validateJsonBody<RequestType>(request)
+    validateRequired(body, ['field1', 'field2'])
+    validateUUID(body.projectId, 'Project ID')
+
+    // 4. Check project access
+    await requireProjectAccess(user, body.projectId)
+
+    // 5. Get Supabase client
+    const supabase = createServerClient()
+
+    // 6. Convert API format to DB format
+    const dbStatus = statusToDb(body.status)
+    const dbPriority = priorityToDb(body.priority)
+
+    // 7. Query with account isolation
+    const { data, error } = await supabase
+      .from('table')
+      .select('*')
+      .eq('account_id', user.account_id)
+      .eq('id', body.id)
+
+    if (error || !data) {
+      throw APIErrors.notFound('Resource')
+    }
+
+    // 8. Return success response
+    return successResponse({ data })
+  } catch (error) {
+    return handleError(error)
+  }
+}
+```
+
+### Update Pattern with Format Conversion
+
+```ts
+// Get feature from DB (DB format)
+const { data: feature } = await supabase
+  .from('features')
+  .select('*')
+  .eq('id', featureId)
+  .eq('account_id', user.account_id)
+  .single()
+
+// Convert to API format for response
+const apiFeature = {
+  ...feature,
+  status: statusToApi(feature.status),
+  priority: priorityToApi(feature.priority),
+}
+
+// Update with conversion
+const updates = {
+  status: statusToDb(body.status),
+  priority: priorityToDb(body.priority),
+}
+await supabase.from('features').update(updates).eq('id', featureId)
+```
+
+## Gotchas & Common Mistakes
+
+1. **Forgetting account_id filter** - Always include `.eq('account_id', user.account_id)` in queries
+2. **Hardcoding DB values** - Never use `'backlog'` or `'P0'` directly. Use conversion functions
+3. **Missing format conversion** - Always convert between DB and API formats
+4. **Not validating permissions** - Always check permissions before allowing operations
+5. **Missing error handling** - Always wrap in try/catch and use `handleError()`
+6. **Not validating request body** - Always validate with `validateJsonBody()` and `validateRequired()`
+7. **Using wrong validation function** - Use `validateFeatureStatusApi()` for API format, `validateFeatureStatus()` for DB format
+8. **Not checking project access** - Always use `requireProjectAccess()` before accessing project resources

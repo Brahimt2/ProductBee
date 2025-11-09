@@ -18,285 +18,518 @@
 4. Create feature docs in `/docs/features/frontend/` after completing each phase
 5. Update `/docs/frontend/summary.md` with completed features
 
+## Phase Dependencies
+
+**Completed Phases (1-11):**
+- Phase 1-3: Core infrastructure ✅
+- Phase 4: Account Isolation & Permissions ✅
+- Phase 5: User Roles & Team Management ✅
+- Phase 6: Jira-Style Ticket Model ✅
+- Phase 7: Timeline Engine & Gantt ✅
+- Phase 8: Team Workload & Availability ✅
+- Phase 9: AI Smart Assignment Suggestions ✅
+- Phase 10: Feedback & Proposal System ✅
+
+**Upcoming Phases:**
+- Phase 12: Drag-and-Drop (depends on: Phase 6, Phase 10)
+- Phase 13: Multi-Project Gantt (depends on: Phase 7)
+- Phase 14: PM Project Visibility (depends on: Phase 4)
+
+## Migration Notes
+
+When adding new database fields:
+1. Create migration SQL file in `/supabase/`
+2. Document migration in phase notes
+4. Update schema.sql with new structure
+5. Update TypeScript types in `/types/database.ts` and `/models/`
+
+When adding new API endpoints:
+1. Document in `/docs/api.md`
+2. Add to permission matrix
+3. Update API types in `/types/api.ts`
+4. Add validation functions if needed
+
+When adding new constants:
+1. Add to `/lib/constants.ts`
+2. Document in architecture docs
+3. Update validation functions if needed
+
 ## Phase Status
 
-### Phase 1: Infrastructure Setup
-**Status:** ✅ Completed
-
-**BACKEND:**
-- [x] Create `/lib/constants.ts` with all constants
-- [x] Create `/models/` TypeScript interfaces (base, User, Project, Feature, Feedback)
-- [x] Create `/lib/api/` utilities (permissions, validation, errors)
-- [x] Reorganize `/lib/prompts/` (roadmap, feedback, comparison)
-- [x] Refactor `gemini.ts` to use modular prompts
-- [x] Create `/types/` TypeScript types (index, api, database, feedback, roadmap)
-
-**FRONTEND:**
-- [x] Reorganize components into feature folders
-- [x] Create custom hooks (`useProject`, `useFeature`, `useFeedback`)
-- [x] Update TypeScript types usage
-- [x] Implement server/client component patterns
-
-### Phase 2: API Routes & Error Handling
-**Status:** ✅ Completed
-
-**BACKEND:**
-- [x] Implement all API routes with consistent error handling
-- [x] Add comprehensive error logging and handling
-- [x] Implement validation utilities
-- [x] Implement permission checks
-- [x] Enhance Gemini integration error handling
-
-**FRONTEND:**
-- [x] Fix API response wrapper handling
-- [x] Update all API calls to handle response format
-- [x] Improve error handling in components
-- [x] Add real-time Supabase subscriptions
-
-### Phase 3: Documentation & Alignment
-**Status:** ✅ Completed
-
-**BACKEND:**
-- [x] Document all API endpoints in `/docs/api.md`
-- [x] Create backend summary in `/docs/backend/summary.md`
-- [x] Align documentation with architecture
-
-**FRONTEND:**
-- [x] Create frontend summary in `/docs/frontend/summary.md`
-- [x] Document component structure
-- [x] Document hooks usage
-- [x] Align documentation with architecture
-
-
-# ## **Phase 4: Account Isolation & Permission Enforcement**
-
-Ensure users can only access data belonging to their accountId.
-Enforce role-based permissions on every backend route.
-### **BACKEND**
-
-* [x] Add `accountId` / `organizationId` to all models:
-
-  * [x] User
-  * [x] Project
-  * [x] Feature
-  * [x] Feedback
-* [x] Add middleware to extract `accountId` from Auth0 metadata
-* [x] Update all Supabase queries to enforce account scoping
-* [x] Implement permission rules in `/lib/api/permissions.ts`:
-
-  * [x] `canViewProject`
-  * [x] `canEditProject`
-  * [x] `canAssignTasks`
-  * [x] `canApproveProposals`
-  * [x] Role-based checks for PM / Engineer / Viewer
-* [x] Add permission enforcement to **every route**
-* [x] Update API documentation with account isolation details
-
-### **FRONTEND**
-
-* [x] Add role-based UI rendering:
-
-  * [x] Hide PM-only actions from non-PMs
-  * [x] Hide assignment features from non-PMs
-  * [x] Viewer = read-only UI
-* [x] Add permission-aware guards before API calls
-* [x] Show helpful permission error messages
-
-
-# ## **Phase 5: User Roles & Team Management**
-
-**Status:** ✅ Completed
-
-Allow each user to set and update their role + specialization.
-Provide an API and UI to list all team members with their assigned roles.
-### **BACKEND**
-
-* [x] Extend User model with:
-
-  * [x] `role` (PM, Engineer, Viewer) - Already existed, verified
-  * [x] `specialization` (Backend, Frontend, QA, DevOps)
-  * [x] `vacationDates`
-  * [x] `currentTicketCount` (computed field)
-  * [x] `currentStoryPointCount` (computed field)
-* [x] Add specialization enum to constants
-* [x] Create:
-
-  * [x] `GET /api/user/profile`
-  * [x] `PATCH /api/user/profile`
-  * [x] `GET /api/team/members`
-* [x] Limit profile updates to the current user
-* [x] Add full documentation in `/docs/api.md`
-
-**Note:** Workload metrics (currentTicketCount, currentStoryPointCount) are computed fields that return 0 until Phase 6 is complete (when `assignedTo` field is added to features). The infrastructure is in place and will automatically work once Phase 6 is implemented.
-
-### **FRONTEND**
-
-* [x] Create role onboarding screen:
-
-  * [x] `/onboarding` or `/profile`
-  * [x] PM vs Engineer selector
-  * [x] Specialization dropdown for Engineers
-* [x] Redirect user to onboarding until role is set
-* [x] Create TeamMembersList with roles + specialization
+**Total Phases:** 14  
+**Completed:** 10  
+**Remaining:** 4
 
 ---
 
-# ## **Phase 6: Jira-Style Ticket Model Expansion**
-Support manual creation of tickets with story points, labels, type, and acceptance criteria.
-Accept and store expanded ticket fields in AI-generated roadmaps.
+## **Phase 11: AI-Powered Chatbot for Ticket Generation**
 
-## give to claude or chat and have it make PM see all and employee only see what they are assigned to
+**Status:** Complete ✅  
+**Dependencies:** Phase 6 (Jira-Style Tickets), Phase 9 (AI Assignment)  
+**Estimated Complexity:** High
+
+### Before Starting
+
+**Prerequisites:**
+- Phase 6 and Phase 9 must be completed
+- Understand Gemini API integration patterns (see `/lib/gemini.ts`)
+- Review prompt patterns in `/lib/prompts/`
+- Understand localStorage patterns for client-side state
+
+**Setup:**
+- No database migrations required
+- No new constants needed
+- New API endpoints: `/api/chat/generate-tickets`, `/api/chat/apply-tickets`
 
 ### **BACKEND**
 
-* [x] Extend Feature model with:
+Enable PMs to have an ongoing conversation with AI to generate, modify, and refine tickets interactively.
 
-  * [x] `assignedTo`
-  * [x] `reporter`
-  * [x] `storyPoints`
-  * [x] `labels[]`
-  * [x] `acceptanceCriteria`
-  * [x] `ticketType` (feature, bug, epic, story)
-* [x] Update `POST /api/roadmap/generate` to include these fields
-* [x] Update Gemini prompts to understand Jira-style fields
-* [x] Add `POST /api/feature/create` for manual ticket creation
+- [x] Create `/lib/prompts/chatbot.ts` for conversational prompts
+- [x] Create chat message types in `/types/chat.ts`:
+  - [x] `ChatMessage` (role: user/assistant, content, timestamp)
+  - [x] `ChatContext` (projectId, conversationHistory, generatedTickets)
+- [x] Implement `chatWithAI()` in `/lib/gemini.ts`:
+  - [x] Accept conversation history + new message
+  - [x] Return AI response + updated ticket suggestions
+  - [x] Understand commands like "add auth to sprint 2", "change priority of ticket 3"
+- [x] Create `POST /api/chat/generate-tickets`:
+  - [x] Accept: projectId, message, conversationHistory (from localStorage)
+  - [x] Return: AI response, suggested tickets (array), confidence scores
+- [x] Create `POST /api/chat/apply-tickets`:
+  - [x] Accept: projectId, tickets[] (from chat suggestions)
+  - [x] Bulk create tickets with AI-suggested assignments
+  - [x] Return: created ticket IDs
+
+**API Changes:**
+- New endpoint: `POST /api/chat/generate-tickets`
+- New endpoint: `POST /api/chat/apply-tickets`
+- Both require PM/Admin permissions
+- Both enforce account isolation
+
+**Constants Updates:**
+- None required
+
+**Database Changes:**
+- None required (uses existing features table)
+
 
 ### **FRONTEND**
 
-* [x] Expand CreateProjectModal:
+- [x] Replace roadmap summary textbox with ChatInterface component:
+  - [x] Persistent chat panel (collapsible sidebar or bottom drawer)
+  - [x] Message history display
+  - [x] Input field with "Generate Tickets" button
+- [x] Create TicketGenerationControls component:
+  - [x] Slider: "Generate All" / "One at a Time" / "None" (like Cursor's allowlist)
+  - [x] Shows pending AI-suggested tickets in queue
+- [x] Implement lazy loading for tickets:
+  - [x] Show skeleton loaders when generation starts
+  - [x] Fade in tickets as Gemini responds (stagger animation)
+  - [x] Complete fade after assignee suggestion loads
+  - [x] Use loading state timing from first ticket for consistency
+- [x] Store chat history in localStorage:
+  - [x] Key: `chat-history-${projectId}`
+  - [x] Max 50 messages (prune oldest)
+  - [x] Clear on project deletion
+- [x] Add "Modify with AI" button on project page to reopen chat
 
-  * [x] Priority selector
-  * [x] Estimated effort
-  * [x] Labels/tags
-* [x] Create TicketCreateForm:
+**Frontend Changes:**
+- New component: `ChatInterface` (in `/components/project/`)
+- New component: `TicketGenerationControls` (in `/components/project/`)
+- Update: `CreateProjectModal` or project page to include chat
+- New hook: `useChat` (optional, in `/hooks/`)
 
-  * [x] Ticket type dropdown
-  * [x] Assignment dropdown
-  * [x] Story points
-  * [x] Acceptance criteria
-  * [x] Labels
-  * [x] Reporter auto-filled
-* [x] Add validation for all fields
+**Testing:**
+- [ ] Test chat UI interactions
+- [ ] Test localStorage persistence
+- [ ] Test ticket generation UI
+- [ ] Test lazy loading animations
+- [ ] Test chat history management
+- [ ] Test on mobile devices
+
+**Completion Checklist:**
+- [x] All backend tasks complete
+- [x] All frontend tasks complete
+- [x] API documentation updated
+- [x] Feature documentation created
+- [x] Backend summary updated
+- [x] Frontend summary updated
+- [ ] Manual testing complete
+- [ ] Code reviewed
 
 ---
 
-# ## **Phase 7: Gantt Chart & Timeline View**
-Return correctly calculated timeline data (dates, dependencies, critical path) from backend.
-Display a fully interactive Gantt chart with view switching on frontend.
+## **Phase 12: Drag-and-Drop with Two-Way Confirmation**
+
+**Status:** Not Started  
+**Dependencies:** Phase 6 (Jira-Style Tickets), Phase 10 (Feedback System)  
+**Estimated Complexity:** Medium
+
+### Before Starting
+
+**Prerequisites:**
+- Phase 6 and Phase 10 must be completed
+- Understand permission system (see `/lib/api/permissions.ts`)
+- Review feature status update patterns
+
+**Setup:**
+- Database migration required: New `pending_changes` table
+- New constants: PendingChange status enum
+- New API endpoints: `/api/feature/[id]/propose-status-change`, `/api/feature/[id]/approve-status-change`, `/api/feature/[id]/reject-status-change`, `/api/project/[id]/pending-changes`
+
 ### **BACKEND**
 
-* [x] Ensure Feature model has:
+Allow PMs and Engineers to drag tickets between status columns with mutual approval required.
 
-  * [x] `startDate`
-  * [x] `endDate`
-  * [x] `duration`
-* [x] Extend `GET /api/project/[id]` to return:
+### **BACKEND**
 
-  * [x] Sorted features by start date
-  * [x] Dependency chains
-  * [x] Critical path information
-* [x] Create timeline calculation helper:
+- [ ] Create PendingChange model:
+  - [ ] `featureId`
+  - [ ] `proposedBy` (userId)
+  - [ ] `fromStatus`
+  - [ ] `toStatus`
+  - [ ] `status` (pending/approved/rejected)
+  - [ ] `createdAt`
+- [ ] Create `POST /api/feature/[id]/propose-status-change`:
+  - [ ] Accept: newStatus
+  - [ ] Create PendingChange record
+  - [ ] Return: pendingChangeId
+- [ ] Create `POST /api/feature/[id]/approve-status-change`:
+  - [ ] Accept: pendingChangeId
+  - [ ] Update Feature status
+  - [ ] Mark PendingChange as approved
+  - [ ] Notify proposer
+- [ ] Create `POST /api/feature/[id]/reject-status-change`:
+  - [ ] Mark PendingChange as rejected
+  - [ ] Notify proposer with reason
+- [ ] Create `GET /api/project/[id]/pending-changes`:
+  - [ ] Return all pending status changes for project
+  - [ ] Used for notification counter
 
-  * [x] Durations
-  * [x] Overlaps
-  * [x] Milestones
+**API Changes:**
+- New endpoint: `POST /api/feature/[id]/propose-status-change` (Engineers, PMs, Admins)
+- New endpoint: `POST /api/feature/[id]/approve-status-change` (PMs, Admins)
+- New endpoint: `POST /api/feature/[id]/reject-status-change` (PMs, Admins)
+- New endpoint: `GET /api/project/[id]/pending-changes` (All authenticated users)
+
+**Constants Updates:**
+- Add `PENDING_CHANGE_STATUS` to `/lib/constants.ts`: `PENDING`, `APPROVED`, `REJECTED`
+
+**Database Changes:**
+- Create `pending_changes` table with fields: `id`, `feature_id`, `proposed_by`, `from_status`, `to_status`, `status`, `account_id`, `created_at`
+- Add index on `feature_id` and `account_id`
+- Add foreign key to `features` table
+
+**Migration SQL:**
+```sql
+CREATE TABLE pending_changes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  feature_id UUID REFERENCES features(id) ON DELETE CASCADE,
+  proposed_by UUID REFERENCES users(id) ON DELETE CASCADE,
+  from_status TEXT NOT NULL,
+  to_status TEXT NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+  account_id TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_pending_changes_feature_id ON pending_changes(feature_id);
+CREATE INDEX idx_pending_changes_account_id ON pending_changes(account_id);
+```
+
+**Testing:**
+- [ ] Test status change proposal
+- [ ] Test approval workflow
+- [ ] Test rejection workflow
+- [ ] Test permission enforcement
+- [ ] Test account isolation
+- [ ] Test notification counter
 
 ### **FRONTEND**
 
-* [x] Install Gantt library (`gantt-task-react` or `dhtmlx-gantt`)
-* [x] Create GanttView component:
+- [ ] Install drag-and-drop library (`@dnd-kit/core` or `react-beautiful-dnd`)
+- [ ] Make Kanban columns draggable:
+  - [ ] Optimistic UI update (immediate visual feedback)
+  - [ ] Ghost card shows in new column
+  - [ ] Original card shows "Pending approval" badge
+- [ ] Create PendingChangesNotification component:
+  - [ ] Small counter badge on project card/header
+  - [ ] Shows count of pending approvals
+  - [ ] Click → opens PendingChangesList modal
+- [ ] Create PendingChangesList modal:
+  - [ ] Shows all pending status changes
+  - [ ] Each item: "User X wants to move Feature Y from A → B"
+  - [ ] Approve / Reject buttons
+  - [ ] Reason field for rejection
+- [ ] Handle rejection:
+  - [ ] Revert card to original column with animation
+  - [ ] Show toast: "Change rejected by [User]"
 
-  * [x] Feature bars
-  * [x] Dependencies
-  * [x] Colors by priority
-  * [x] Click → open FeatureModal
-  * [x] Hover → tooltip
-* [x] Create ViewToggle for Gantt vs Backlog
-* [x] Make Gantt the default view
-* [x] Save view preference in localStorage
-* [x] Integrate into ProjectDetailClient
+**Frontend Changes:**
+- Install: `@dnd-kit/core` or `react-beautiful-dnd` package
+- New component: `PendingChangesNotification` (in `/components/project/`)
+- New component: `PendingChangesList` modal (in `/components/modals/`)
+- Update: `ProjectDetailClient` to support drag-and-drop
+- Update: `FeatureCard` to show pending status
+- New hook: `usePendingChanges` (optional, in `/hooks/`)
 
+**Testing:**
+- [ ] Test drag-and-drop functionality
+- [ ] Test optimistic UI updates
+- [ ] Test approval/rejection UI
+- [ ] Test notification badge
+- [ ] Test animation on rejection
+- [ ] Test on mobile devices (if supported)
 
-# ## **Phase 8: Enhanced Team Workload & Assignment List**
-Return team members with workload metrics (tickets, story points, vacation status).
-Display a searchable, clear assignment dropdown reflecting workload and specialization.
-### **BACKEND**
-
-* [x] Ensure `GET /api/team/members` returns:
-
-  * [x] Role badges (role field)
-  * [x] Specialization
-  * [x] Story point count (computed, returns 0 until Phase 6)
-  * [x] Ticket count (computed, returns 0 until Phase 6)
-  * [x] Vacation status (isOnVacation field)
-* [x] Create `GET /api/team/members/available` to exclude vacationing users
-
-### **FRONTEND**
-
-* [ ] Create EmployeeAssignmentDropdown:
-
-  * [ ] Role badges
-  * [ ] Specialization grouping
-  * [ ] Workload summary
-  * [ ] Vacation indicator
-  * [ ] Search/filter
-* [ ] Integrate into TicketCreateForm + FeatureModal
-
-
-# ## **Phase 9: AI Smart Assignment Suggestions**
-Backend generates ranked assignee recommendations using task + workload data.
-Frontend allows user to request and apply AI assignment suggestions.
-### **BACKEND**
-
-* [x] Create `/lib/ai/assignment.ts`
-* [x] Implement `suggestAssignment()` using:
-
-  * [x] Task description
-  * [x] Required specialization
-  * [x] Developer workload
-  * [x] Vacation schedules
-  * [x] Past assignment history
-* [x] Create `POST /api/feature/suggest-assignee`
-* [x] Integrate with Gemini:
-
-  * [x] Analyze project history
-  * [x] Infer required specialization
-  * [x] Rank top engineers with reasoning
-
-### **FRONTEND**
-
-* [ ] Add “AI Suggestion” button inside assignment dropdown
-* [ ] Display:
-
-  * [ ] Top 3 recommended assignees
-  * [ ] Reasoning
-  * [ ] Confidence score
-* [ ] Manual override option
-* [ ] Autosuggest based on description typing (debounced)
+**Completion Checklist:**
+- [ ] All backend tasks complete
+- [ ] All frontend tasks complete
+- [ ] Database migration applied
+- [ ] API documentation updated
+- [ ] Feature documentation created
+- [ ] Backend summary updated
+- [ ] Frontend summary updated
+- [ ] Manual testing complete
+- [ ] Code reviewed
 
 ---
 
-# ## **Phase 10: Feedback & Proposal System**
-**Status:** ✅ Backend Completed
+## **Phase 13: Multi-Project Gantt Dashboard**
 
-Store and manage feedback threads and proposal approvals per feature.
-Enable PMs to review and compare proposals with AI-generated summaries.
+**Status:** Not Started  
+**Dependencies:** Phase 7 (Timeline Engine & Gantt)  
+**Estimated Complexity:** Medium
+
+### Before Starting
+
+**Prerequisites:**
+- Phase 7 must be completed
+- Understand timeline utilities (see `/lib/api/timeline.ts`)
+- Review Gantt chart implementation
+
+**Setup:**
+- No database migrations required
+- No new constants needed
+- New API endpoints: `/api/gantt/overview`, `/api/gantt/admin`
+- New page: `/app/gantt-overview/page.tsx`
+
 ### **BACKEND**
 
-* [x] Create Feedback model
-* [x] Add feedback prompts under `/lib/prompts/feedback.ts`
-* [x] Add comparison prompts under `/lib/prompts/comparison.ts`
-* [x] Implement `analyzeProposal()` in Gemini wrapper (equivalent to `analyzeFeedback()`)
-* [x] Create endpoints:
+Display aggregated Gantt chart showing all projects a PM oversees, with drill-down capability.
 
-  * [x] `POST /api/feedback/create`
-  * [x] `POST /api/feedback/approve` (PM only)
-  * [x] `POST /api/feedback/reject` (PM only)
-* [x] Ensure feedback respects account isolation
+### **BACKEND**
+
+- [ ] Create `GET /api/gantt/overview`:
+  - [ ] Accept: userId, filterBy (project/engineer/label)
+  - [ ] Return all projects user has access to with timeline data
+  - [ ] Include: project name, features, start/end dates, assignees
+- [ ] Create `GET /api/gantt/admin`:
+  - [ ] Admin-only endpoint
+  - [ ] Return ALL projects across all PMs
+  - [ ] Include PM ownership info
+- [ ] Add query params for filtering:
+  - [ ] `?groupBy=project` (default)
+  - [ ] `?groupBy=engineer` (show all tasks per engineer)
+  - [ ] `?groupBy=label` (group by label/tag)
+  - [ ] `?engineerId=X` (filter to specific engineer)
+
+**API Changes:**
+- New endpoint: `GET /api/gantt/overview` (PMs, Admins)
+- New endpoint: `GET /api/gantt/admin` (Admins only)
+- Query parameters: `?groupBy=project|engineer|label`, `?engineerId=uuid`, `?projectId=uuid`
+
+**Constants Updates:**
+- None required
+
+**Database Changes:**
+- None required (uses existing projects and features)
+
+**Testing:**
+- [ ] Test multi-project Gantt data aggregation
+- [ ] Test filtering by engineer
+- [ ] Test filtering by project
+- [ ] Test grouping options
+- [ ] Test admin endpoint (all projects)
+- [ ] Test permission enforcement
+- [ ] Test account isolation
 
 ### **FRONTEND**
 
-* [ ] Create FeedbackThread component
-* [ ] Add feedback section in FeatureModal
-* [ ] Build CommentForm + ProposalForm
-* [ ] Build side-by-side ProposalApprovalView
+- [ ] Create `/app/gantt-overview/page.tsx` (new page):
+  - [ ] Multi-project Gantt chart (horizontal timeline)
+  - [ ] Each project as separate swimlane
+  - [ ] Features shown as bars within project lanes
+- [ ] Create FilterControls component:
+  - [ ] Toggle: Group by Project / Engineer / Label
+  - [ ] Dropdown: Filter by specific engineer
+  - [ ] Dropdown: Filter by specific project (for PMs with many projects)
+- [ ] Implement drill-down:
+  - [ ] Click project name → navigate to single-project Gantt
+  - [ ] Click feature bar → open FeatureModal
+  - [ ] Click engineer name → filter to that engineer's tasks
+- [ ] Add to navigation:
+  - [ ] PM role: "Gantt Overview" menu item
+  - [ ] Admin role: "Admin Gantt Overview" (shows all PMs' projects)
+- [ ] Handle large datasets:
+  - [ ] Virtual scrolling for many projects
+  - [ ] Collapse/expand projects
+  - [ ] Date range selector (show only Q1, Q2, etc.)
+
+**Frontend Changes:**
+- New page: `/app/gantt-overview/page.tsx` (server component)
+- New component: `MultiProjectGantt` (in `/components/gantt/`)
+- New component: `FilterControls` (in `/components/gantt/`)
+- Update: Navigation to include "Gantt Overview" for PMs/Admins
+
+**Testing:**
+- [ ] Test multi-project Gantt rendering
+- [ ] Test filtering controls
+- [ ] Test drill-down functionality
+- [ ] Test virtual scrolling (if many projects)
+- [ ] Test date range selector
+- [ ] Test on mobile devices
+
+**Completion Checklist:**
+- [ ] All backend tasks complete
+- [ ] All frontend tasks complete
+- [ ] API documentation updated
+- [ ] Feature documentation created
+- [ ] Backend summary updated
+- [ ] Frontend summary updated
+- [ ] Manual testing complete
+- [ ] Code reviewed
+
+---
+
+## **Phase 14: PM Project Visibility & Admin Oversight**
+
+**Status:** Not Started  
+**Dependencies:** Phase 4 (Account Isolation & Permissions)  
+**Estimated Complexity:** Low
+
+### Before Starting
+
+**Prerequisites:**
+- Phase 4 must be completed
+- Understand permission system (see `/lib/api/permissions.ts`)
+- Review project access patterns
+
+**Setup:**
+- Database migration required: Add `owner_id` and `co_owner_ids` to projects table
+- No new constants needed
+- New API endpoints: `POST /api/project/[id]/add-coowner`, `DELETE /api/project/[id]/remove-coowner`
+- Update: `GET /api/projects` to filter by ownership
+
+### **BACKEND**
+
+Ensure PMs only see their own projects, co-owners see shared projects, and Admins see everything.
+
+### **BACKEND**
+
+- [ ] Update Project model:
+  - [ ] `ownerId` (primary PM)
+  - [ ] `coOwnerIds[]` (array of PM user IDs)
+- [ ] Update `GET /api/projects`:
+  - [ ] Filter by: ownerId = userId OR userId in coOwnerIds (for PMs)
+  - [ ] Return ALL projects (for Admins)
+  - [ ] Add query param `?ownedBy=userId` (Admin only - filter by specific PM)
+- [ ] Update `canViewProject()` in permissions:
+  - [ ] Allow if: user is owner, user is co-owner, or user is admin
+- [ ] Update `canEditProject()` in permissions:
+  - [ ] Allow if: user is owner, user is co-owner, or user is admin
+- [ ] Create `POST /api/project/[id]/add-coowner`:
+  - [ ] Accept: userId (must be PM role)
+  - [ ] Add to coOwnerIds array
+  - [ ] Only owner or admin can add co-owners
+- [ ] Create `DELETE /api/project/[id]/remove-coowner`:
+  - [ ] Remove userId from coOwnerIds
+
+### **FRONTEND**
+
+- [ ] Update ProjectCard component:
+  - [ ] Show owner name
+  - [ ] Show co-owner badges if any
+  - [ ] Admin view: show which PM owns project
+- [ ] Create ProjectSettings modal:
+  - [ ] "Manage Co-Owners" section
+  - [ ] Search/select PMs to add as co-owners
+  - [ ] Remove co-owner button
+  - [ ] Only visible to owner or admin
+- [ ] Update CreateProjectModal:
+  - [ ] Option to "Add Co-Owners" during creation
+  - [ ] Multi-select dropdown of PMs
+- [ ] Admin Dashboard:
+  - [ ] Filter projects by PM owner
+  - [ ] See ownership transfer option
+  - [ ] See all pending changes across all projects
+
+**Frontend Changes:**
+- Update: `ProjectCard` to show owner and co-owners
+- New component: `ProjectSettings` modal (in `/components/modals/`)
+- Update: `CreateProjectModal` to allow adding co-owners
+- Update: `DashboardClient` to show ownership info
+- Update: Admin dashboard to filter by PM owner
+
+**Testing:**
+- [ ] Test project visibility for PMs
+- [ ] Test co-owner management UI
+- [ ] Test admin project filtering
+- [ ] Test ownership display
+- [ ] Test permission enforcement in UI
+
+**Completion Checklist:**
+- [ ] All backend tasks complete
+- [ ] All frontend tasks complete
+- [ ] Database migration applied
+- [ ] API documentation updated
+- [ ] Feature documentation created
+- [ ] Backend summary updated
+- [ ] Frontend summary updated
+- [ ] Manual testing complete
+- [ ] Code reviewed
+
+---
+
+## Progress Summary
+
+**Total Phases:** 14  
+**Completed:** 11  
+**Remaining:** 3
+
+**New Features Added:**
+- Phase 11: AI Chatbot (ticket generation)
+- Phase 12: Drag-and-drop with approval
+- Phase 13: Multi-project Gantt
+- Phase 14: PM visibility & co-ownership
+
+## Known Issues
+
+1. Type mismatch: `'proposal'` (DB) vs `'timeline_proposal'` (API) - Handled by conversion functions
+2. Some components still use magic strings instead of constants - Planned migration
+3. Real-time subscriptions need cleanup verification - Monitor for memory leaks
+
+## Rollback Procedures
+
+If a phase needs to be reverted:
+
+1. **Database Migrations:**
+   - Create rollback migration SQL
+   - Test on development database
+   - Document rollback steps
+
+2. **API Changes:**
+   - Remove new endpoints
+   - Revert permission changes
+   - Update API documentation
+
+3. **Frontend Changes:**
+   - Remove new components
+   - Revert UI changes
+   - Update frontend summary
+
+4. **Constants:**
+   - Remove new constants if not used elsewhere
+   - Update validation functions
+
+Always test rollback on development environment before applying to production.

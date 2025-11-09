@@ -3,7 +3,7 @@ import { getSession } from '@auth0/nextjs-auth0'
 import { createServerClient } from '@/lib/supabase'
 import { analyzeProposal } from '@/lib/gemini'
 import { getUserFromSession, requireProjectAccess } from '@/lib/api/permissions'
-import { validateUUID, validateRequired, validateJsonBody, validateFeedbackType } from '@/lib/api/validation'
+import { validateUUID, validateRequired, validateJsonBody, validateFeedbackType, feedbackTypeToDb, feedbackTypeToApi } from '@/lib/api/validation'
 import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
 import { HTTP_STATUS } from '@/lib/constants'
 import type { CreateFeedbackRequest, CreateFeedbackResponse } from '@/types/api'
@@ -17,9 +17,10 @@ export async function POST(request: NextRequest) {
     validateRequired(body, ['projectId', 'featureId', 'type', 'content'])
     validateUUID(body.projectId, 'Project ID')
     validateUUID(body.featureId, 'Feature ID')
-    validateFeedbackType(body.type)
+    validateFeedbackType(body.type) // Validate API format
 
-    const { projectId, featureId, type, content, proposedRoadmap } = body
+    const { projectId, featureId, content, proposedRoadmap } = body
+    const dbType = feedbackTypeToDb(body.type) // Convert API -> DB
     const supabase = createServerClient()
 
     // Check project access
@@ -55,8 +56,8 @@ export async function POST(request: NextRequest) {
 
     let aiAnalysis = undefined
 
-    // If it's a proposal, analyze it with AI
-    if (type === 'proposal') {
+    // If it's a proposal, analyze it with AI (check DB format)
+    if (dbType === 'proposal') {
       try {
         const analysis = await analyzeProposal(content, project.roadmap)
         aiAnalysis = JSON.stringify(analysis)
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create feedback with account_id for account isolation
+    // Create feedback with account_id for account isolation (using DB format)
     const { data: feedback, error: feedbackError } = await supabase
       .from('feedback')
       .insert({
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
         feature_id: featureId,
         user_id: user.id,
         account_id: user.account_id,
-        type,
+        type: dbType, // Use DB format
         content,
         proposed_roadmap: proposedRoadmap || null,
         ai_analysis: aiAnalysis || null,
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       throw APIErrors.internalError('Failed to create feedback')
     }
 
-    // Format response
+    // Format response (convert DB format to API format)
     const formattedFeedback = {
       _id: feedback.id,
       id: feedback.id,
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
         name: feedback.user_id.name,
         email: feedback.user_id.email,
       } : null,
-      type: feedback.type,
+      type: feedbackTypeToApi(feedback.type), // Convert DB -> API
       content: feedback.content,
       proposedRoadmap: feedback.proposed_roadmap,
       aiAnalysis: feedback.ai_analysis,

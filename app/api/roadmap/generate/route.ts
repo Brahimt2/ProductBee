@@ -3,9 +3,9 @@ import { getSession } from '@auth0/nextjs-auth0'
 import { createServerClient } from '@/lib/supabase'
 import { generateRoadmap } from '@/lib/gemini'
 import { getUserFromSession } from '@/lib/api/permissions'
-import { validateRequired, validateJsonBody } from '@/lib/api/validation'
+import { validateRequired, validateJsonBody, priorityToApi, statusToApi } from '@/lib/api/validation'
 import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
-import { HTTP_STATUS } from '@/lib/constants'
+import { HTTP_STATUS, DB_FEATURE_STATUS } from '@/lib/constants'
 import type { GenerateRoadmapRequest, GenerateRoadmapResponse } from '@/types/api'
 
 export async function POST(request: NextRequest) {
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       priority: feature.priority,
       effort_estimate_weeks: feature.effortEstimateWeeks || 1,
       depends_on: [], // Will update after all features are created
-      status: 'backlog',
+      status: DB_FEATURE_STATUS.BACKLOG, // DB format using constant
       original_index: index, // Store original index for dependency resolution
       original_depends_on: feature.dependsOn || [], // Store dependency indices
       // Jira-style fields (Phase 6)
@@ -106,7 +106,9 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (featuresError || !createdFeatures) {
-      throw APIErrors.internalError('Failed to create features')
+      console.error('[Roadmap Generate] Features creation error:', featuresError)
+      console.error('[Roadmap Generate] Features to create:', featuresToCreate.map(({ original_index, original_depends_on, ...f }) => f))
+      throw APIErrors.internalError(`Failed to create features: ${featuresError?.message || 'Unknown error'}`)
     }
 
     // Update features with dependencies
@@ -129,17 +131,17 @@ export async function POST(request: NextRequest) {
 
     await Promise.all(updatePromises)
 
-    // Format response
+    // Format response (convert DB format to API format using constants)
     const formattedFeatures = createdFeatures.map((feature) => ({
       _id: feature.id,
       id: feature.id,
       projectId: feature.project_id,
       title: feature.title,
       description: feature.description,
-      priority: feature.priority,
+      priority: priorityToApi(feature.priority), // Convert DB -> API using constants
       effortEstimateWeeks: feature.effort_estimate_weeks,
       dependsOn: feature.depends_on || [],
-      status: feature.status,
+      status: statusToApi(feature.status), // Convert DB -> API using constants
       createdAt: feature.created_at,
       // Jira-style fields (Phase 6)
       assignedTo: feature.assigned_to || null,

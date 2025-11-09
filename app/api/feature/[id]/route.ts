@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
 import { createServerClient } from '@/lib/supabase'
 import { getUserFromSession, requireProjectAccess } from '@/lib/api/permissions'
-import { validateUUID, validateJsonBody, validateFeatureStatus, validatePriority, validateTicketType, validateStoryPoints, validateLabels } from '@/lib/api/validation'
+import { validateUUID, validateJsonBody, validatePriority, validateFeatureStatusApi, validateTicketType, validateStoryPoints, validateLabels, priorityToDb, priorityToApi, statusToDb, statusToApi } from '@/lib/api/validation'
 import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
 import type { UpdateFeatureRequest, UpdateFeatureResponse } from '@/types/api'
 
@@ -40,15 +40,15 @@ export async function PATCH(
       throw APIErrors.forbidden('Access denied. Feature belongs to a different account.')
     }
 
-    // Map camelCase to snake_case for database and validate
+    // Map camelCase to snake_case for database and validate (convert API -> DB)
     const dbUpdates: any = {}
     if (updates.status !== undefined) {
-      validateFeatureStatus(updates.status)
-      dbUpdates.status = updates.status
+      validateFeatureStatusApi(updates.status) // Validate API format
+      dbUpdates.status = statusToDb(updates.status) // Convert API -> DB
     }
     if (updates.priority !== undefined) {
-      validatePriority(updates.priority)
-      dbUpdates.priority = updates.priority
+      validatePriority(updates.priority) // Validate API format
+      dbUpdates.priority = priorityToDb(updates.priority) // Convert API -> DB
     }
     if (updates.title !== undefined) {
       dbUpdates.title = updates.title
@@ -110,15 +110,15 @@ export async function PATCH(
       throw APIErrors.internalError('Failed to update feature')
     }
 
-    // Format response
+    // Format response (convert DB format to API format)
     const formattedFeature = {
       _id: feature.id,
       id: feature.id,
       projectId: feature.project_id,
       title: feature.title,
       description: feature.description,
-      status: feature.status,
-      priority: feature.priority,
+      status: statusToApi(feature.status), // Convert DB -> API
+      priority: priorityToApi(feature.priority), // Convert DB -> API
       effortEstimateWeeks: feature.effort_estimate_weeks,
       dependsOn: feature.depends_on || [],
       createdAt: feature.created_at,

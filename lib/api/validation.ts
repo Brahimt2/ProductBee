@@ -1,4 +1,15 @@
 import { APIErrors } from './errors'
+import { 
+  PRIORITY_LEVELS, 
+  DB_PRIORITY_LEVELS,
+  FEATURE_STATUS,
+  DB_FEATURE_STATUS,
+  FEEDBACK_TYPE,
+  DB_FEEDBACK_TYPE,
+  SPECIALIZATIONS,
+  TICKET_TYPES,
+  ROLES,
+} from '@/lib/constants'
 
 /**
  * UUID validation regex
@@ -41,7 +52,7 @@ export function validateEmail(email: string): void {
  * Validate role
  */
 export function validateRole(role: string): void {
-  const validRoles = ['admin', 'pm', 'engineer', 'viewer']
+  const validRoles = Object.values(ROLES)
   if (!validRoles.includes(role)) {
     throw APIErrors.badRequest(`Invalid role. Must be one of: ${validRoles.join(', ')}`)
   }
@@ -54,7 +65,7 @@ export function validateSpecialization(specialization: string | null | undefined
   if (specialization === null || specialization === undefined) {
     return // null/undefined is valid (not all users have specialization)
   }
-  const validSpecializations = ['Backend', 'Frontend', 'QA', 'DevOps']
+  const validSpecializations = Object.values(SPECIALIZATIONS)
   if (!validSpecializations.includes(specialization)) {
     throw APIErrors.badRequest(`Invalid specialization. Must be one of: ${validSpecializations.join(', ')}`)
   }
@@ -93,30 +104,113 @@ export function validateVacationDates(vacationDates: any): void {
  * Validate feature status (database format)
  */
 export function validateFeatureStatus(status: string): void {
-  const validStatuses = ['backlog', 'active', 'blocked', 'complete']
-  if (!validStatuses.includes(status)) {
+  const validStatuses = Object.values(DB_FEATURE_STATUS)
+  if (!validStatuses.includes(status as any)) {
     throw APIErrors.badRequest(`Invalid status. Must be one of: ${validStatuses.join(', ')}`)
   }
 }
 
 /**
- * Validate priority (database format)
+ * Validate priority (API format - what frontend sends)
  */
 export function validatePriority(priority: string): void {
-  const validPriorities = ['P0', 'P1', 'P2']
-  if (!validPriorities.includes(priority)) {
+  const validPriorities = Object.values(PRIORITY_LEVELS)
+  if (!validPriorities.includes(priority as any)) {
     throw APIErrors.badRequest(`Invalid priority. Must be one of: ${validPriorities.join(', ')}`)
   }
 }
 
 /**
- * Validate feedback type (database format)
+ * Validate feature status (API format - what frontend sends)
+ */
+export function validateFeatureStatusApi(status: string): void {
+  const validStatuses = Object.values(FEATURE_STATUS)
+  if (!validStatuses.includes(status as any)) {
+    throw APIErrors.badRequest(`Invalid status. Must be one of: ${validStatuses.join(', ')}`)
+  }
+}
+
+/**
+ * Convert API priority to DB priority using constants
+ */
+export function priorityToDb(apiPriority: string): string {
+  const mapping: Record<string, string> = {
+    [PRIORITY_LEVELS.CRITICAL]: DB_PRIORITY_LEVELS.P0,
+    [PRIORITY_LEVELS.HIGH]: DB_PRIORITY_LEVELS.P1,
+    [PRIORITY_LEVELS.MEDIUM]: DB_PRIORITY_LEVELS.P2,
+    [PRIORITY_LEVELS.LOW]: DB_PRIORITY_LEVELS.P2,
+  }
+  return mapping[apiPriority] || DB_PRIORITY_LEVELS.P2
+}
+
+/**
+ * Convert DB priority to API priority using constants
+ */
+export function priorityToApi(dbPriority: string): string {
+  const mapping: Record<string, string> = {
+    [DB_PRIORITY_LEVELS.P0]: PRIORITY_LEVELS.CRITICAL,
+    [DB_PRIORITY_LEVELS.P1]: PRIORITY_LEVELS.HIGH,
+    [DB_PRIORITY_LEVELS.P2]: PRIORITY_LEVELS.MEDIUM,
+  }
+  return mapping[dbPriority] || PRIORITY_LEVELS.MEDIUM
+}
+
+/**
+ * Convert API status to DB status using constants
+ */
+export function statusToDb(apiStatus: string): string {
+  const mapping: Record<string, string> = {
+    [FEATURE_STATUS.NOT_STARTED]: DB_FEATURE_STATUS.BACKLOG,
+    [FEATURE_STATUS.IN_PROGRESS]: DB_FEATURE_STATUS.ACTIVE,
+    [FEATURE_STATUS.BLOCKED]: DB_FEATURE_STATUS.BLOCKED,
+    [FEATURE_STATUS.COMPLETE]: DB_FEATURE_STATUS.COMPLETE,
+  }
+  return mapping[apiStatus] || DB_FEATURE_STATUS.BACKLOG
+}
+
+/**
+ * Convert DB status to API status using constants
+ */
+export function statusToApi(dbStatus: string): string {
+  const mapping: Record<string, string> = {
+    [DB_FEATURE_STATUS.BACKLOG]: FEATURE_STATUS.NOT_STARTED,
+    [DB_FEATURE_STATUS.ACTIVE]: FEATURE_STATUS.IN_PROGRESS,
+    [DB_FEATURE_STATUS.BLOCKED]: FEATURE_STATUS.BLOCKED,
+    [DB_FEATURE_STATUS.COMPLETE]: FEATURE_STATUS.COMPLETE,
+  }
+  return mapping[dbStatus] || FEATURE_STATUS.NOT_STARTED
+}
+
+/**
+ * Validate feedback type (API format - what frontend sends)
  */
 export function validateFeedbackType(type: string): void {
-  const validTypes = ['comment', 'proposal']
-  if (!validTypes.includes(type)) {
+  const validTypes = Object.values(FEEDBACK_TYPE)
+  if (!validTypes.includes(type as any)) {
     throw APIErrors.badRequest(`Invalid feedback type. Must be one of: ${validTypes.join(', ')}`)
   }
+}
+
+/**
+ * Convert API feedback type to DB feedback type using constants
+ */
+export function feedbackTypeToDb(apiType: string): string {
+  const mapping: Record<string, string> = {
+    [FEEDBACK_TYPE.COMMENT]: DB_FEEDBACK_TYPE.COMMENT,
+    [FEEDBACK_TYPE.TIMELINE_PROPOSAL]: DB_FEEDBACK_TYPE.PROPOSAL,
+  }
+  return mapping[apiType] || DB_FEEDBACK_TYPE.COMMENT
+}
+
+/**
+ * Convert DB feedback type to API feedback type using constants
+ */
+export function feedbackTypeToApi(dbType: string): string {
+  const mapping: Record<string, string> = {
+    [DB_FEEDBACK_TYPE.COMMENT]: FEEDBACK_TYPE.COMMENT,
+    [DB_FEEDBACK_TYPE.PROPOSAL]: FEEDBACK_TYPE.TIMELINE_PROPOSAL,
+  }
+  return mapping[dbType] || FEEDBACK_TYPE.COMMENT
 }
 
 /**
@@ -146,7 +240,7 @@ export function validateTicketType(ticketType: string | null | undefined): void 
   if (ticketType === null || ticketType === undefined) {
     return // null/undefined is valid (defaults to 'feature')
   }
-  const validTypes = ['feature', 'bug', 'epic', 'story']
+  const validTypes = Object.values(TICKET_TYPES)
   if (!validTypes.includes(ticketType)) {
     throw APIErrors.badRequest(`Invalid ticket type. Must be one of: ${validTypes.join(', ')}`)
   }

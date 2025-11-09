@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { TICKET_TYPES, PRIORITY_LEVELS, ROLES } from '@/lib/constants'
 import { useFeature } from '@/hooks/useFeature'
-import { useTeamMembers } from '@/hooks/useTeamMembers'
 import { useUserProfile } from '@/hooks/useUserProfile'
+import EmployeeAssignmentDropdown from './EmployeeAssignmentDropdown'
 import type { CreateFeatureRequest } from '@/types'
 
 interface TicketCreateFormProps {
@@ -13,6 +13,7 @@ interface TicketCreateFormProps {
   onClose: () => void
   projectId: string
   onSuccess?: () => void
+  userRole?: string
 }
 
 export default function TicketCreateForm({
@@ -20,6 +21,7 @@ export default function TicketCreateForm({
   onClose,
   projectId,
   onSuccess,
+  userRole,
 }: TicketCreateFormProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -33,7 +35,6 @@ export default function TicketCreateForm({
   const [effortEstimateWeeks, setEffortEstimateWeeks] = useState<number>(1)
 
   const { createFeature, isCreating } = useFeature()
-  const { members, loading: membersLoading } = useTeamMembers()
   const { profile, fetchProfile } = useUserProfile()
 
   // Fetch profile when modal opens
@@ -98,11 +99,6 @@ export default function TicketCreateForm({
   }
 
   if (!isOpen) return null
-
-  // Filter members to only show engineers (for assignment)
-  const assignableMembers = members.filter(
-    (member) => member.role === ROLES.ENGINEER || member.role === ROLES.PM || member.role === ROLES.ADMIN
-  )
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -213,20 +209,17 @@ export default function TicketCreateForm({
               >
                 Assign To
               </label>
-              <select
-                id="assignedTo"
-                value={assignedTo || ''}
-                onChange={(e) => setAssignedTo(e.target.value || null)}
-                disabled={membersLoading}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white disabled:opacity-50"
-              >
-                <option value="">Unassigned</option>
-                {assignableMembers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name} {member.specialization ? `(${member.specialization})` : ''}
-                  </option>
-                ))}
-              </select>
+              <EmployeeAssignmentDropdown
+                value={assignedTo}
+                onChange={setAssignedTo}
+                projectId={projectId}
+                taskTitle={title}
+                taskDescription={description}
+                taskLabels={labels}
+                taskType={ticketType}
+                userRole={userRole}
+                showAISuggestion={true}
+              />
             </div>
 
             <div>

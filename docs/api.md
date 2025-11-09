@@ -1,342 +1,478 @@
 # API Documentation
 
-This document describes all API endpoints for the AI Roadmap Dashboard.
-
-## Base URL
-
-All API endpoints are prefixed with `/api`.
+All endpoints are under `/api`, require Auth0 auth (cookie session), and enforce **account isolation** via `account_id` from Auth0 metadata. All queries automatically filter by `account_id`.
 
 ## Authentication
 
-All endpoints require authentication via Auth0. The session is managed through cookies.
-
-## Account Isolation
-
-All API endpoints enforce account isolation. Users can only access data belonging to their `accountId`. The `accountId` is extracted from Auth0 metadata in the following order:
-1. `session.user.app_metadata.account_id` (preferred)
-2. `session.user.user_metadata.account_id` (fallback)
-3. `session.user.org_id` (if using Auth0 Organizations)
-4. Generated from user's email domain (default fallback)
-
-**All queries are automatically filtered by `account_id`** to ensure data isolation between accounts. Users cannot access projects, features, or feedback from other accounts, even if they know the resource IDs.
-
-## Permission Enforcement
-
-The API enforces role-based permissions:
-- **Viewer**: Can view projects and features (read-only)
-- **Engineer**: Can view projects and features, create feedback
-- **PM**: Can view, edit projects, assign tasks, approve/reject proposals
-- **Admin**: Full access within their account
-
-All permission checks also enforce account isolation - users can only perform actions on resources within their account.
+All endpoints (except `/api/auth/**`) require authentication via Auth0. The session is stored in HTTP-only cookies and automatically managed by the Auth0 SDK.
 
 ## Response Format
 
-All API responses follow this format:
+All responses follow this structure:
 
-```typescript
+**Success Response:**
+```json
 {
-  success: boolean
-  data?: T
-  error?: string
-  code?: string
+  "success": true,
+  "data": { /* response data */ }
+}
+```
+
+**Error Response:**
+```json
+{
+  "success": false,
+  "error": "Error message here",
+  "code": "ERROR_CODE"
 }
 ```
 
 ## Error Codes
 
-- `400` - Bad Request
-- `401` - Unauthorized
-- `403` - Forbidden
-- `404` - Not Found
-- `500` - Internal Server Error
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `UNAUTHORIZED` | 401 | Not authenticated or session expired |
+| `FORBIDDEN` | 403 | Insufficient permissions for this action |
+| `NOT_FOUND` | 404 | Resource not found or not accessible |
+| `BAD_REQUEST` | 400 | Invalid request data or validation failed |
+| `INTERNAL_ERROR` | 500 | Server error or unexpected failure |
+
+## Account Isolation
+
+All endpoints enforce account isolation:
+- `account_id` is extracted from Auth0 session metadata
+- All database queries filter by `account_id`
+- Users can only access resources within their account
+- Admins have full access within their account only
+
+## Permission Matrix
+
+| Endpoint | Viewer | Engineer | PM | Admin |
+|----------|--------|----------|----|----|
+| `GET /api/projects` | ✅ | ✅ | ✅ | ✅ |
+| `GET /api/project/:id` | ✅ | ✅ | ✅ | ✅ |
+| `POST /api/roadmap/generate` | ❌ | ❌ | ✅ | ✅ |
+| `POST /api/feature/create` | ❌ | ❌ | ✅ | ✅ |
+| `PATCH /api/feature/:id` | ❌ | ❌ | ✅ | ✅ |
+| `POST /api/feature/suggest-assignee` | ❌ | ❌ | ✅ | ✅ |
+| `POST /api/feedback/create` | ❌ | ✅ | ✅ | ✅ |
+| `POST /api/feedback/approve` | ❌ | ❌ | ✅ | ✅ |
+| `POST /api/feedback/reject` | ❌ | ❌ | ✅ | ✅ |
+| `GET /api/user/profile` | ✅ | ✅ | ✅ | ✅ |
+| `PATCH /api/user/profile` | ✅ | ✅ | ✅ | ✅ |
+| `GET /api/team/members` | ✅ | ✅ | ✅ | ✅ |
+| `GET /api/team/members/available` | ✅ | ✅ | ✅ | ✅ |
+| `POST /api/chat/generate-tickets` | ❌ | ❌ | ✅ | ✅ |
+| `POST /api/chat/apply-tickets` | ❌ | ❌ | ✅ | ✅ |
+
+## Database vs API Format Conversions
+
+The API uses different enum values than the database. Always use conversion functions:
+
+| Field | API Format | Database Format | Conversion Function |
+|-------|------------|-----------------|---------------------|
+| Feature Status | `not_started`, `in_progress`, `blocked`, `complete` | `backlog`, `active`, `blocked`, `complete` | `statusToApi()`, `statusToDb()` |
+| Priority | `critical`, `high`, `medium`, `low` | `P0`, `P1`, `P2` | `priorityToApi()`, `priorityToDb()` |
+| Feedback Type | `comment`, `timeline_proposal` | `comment`, `proposal` | `feedbackTypeToApi()`, `feedbackTypeToDb()` |
+
+**Important:** Frontend always sends/receives API format. Backend converts to/from DB format automatically.
 
 ---
 
-## Projects
+# Projects
 
-### Get All Projects
+## GET `/api/projects`
 
-**GET** `/api/projects`
+Returns all projects for the user's `account_id`.
 
-Returns a list of all projects the user has access to. **Automatically filtered by account_id** - users only see projects from their account.
-
-**Permissions:** All authenticated users can view projects in their account.
+**Permissions:** All authenticated users
 
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    projects: ProjectResponse[]
+  "success": true,
+  "data": {
+    "projects": [
+      {
+        "_id": "uuid",
+        "id": "uuid",
+        "name": "Project Name",
+        "description": "Project description",
+        "roadmap": {
+          "summary": "Roadmap summary",
+          "riskLevel": "low"
+        },
+        "createdAt": "2024-01-01T00:00:00Z",
+        "createdBy": {
+          "name": "Creator Name",
+          "email": "creator@example.com"
+        }
+      }
+    ]
   }
 }
 ```
 
-**Example:**
-```bash
-GET /api/projects
-```
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `500 INTERNAL_ERROR` - Database error
 
----
+## GET `/api/project/:id`
 
-### Get Project by ID
-
-**GET** `/api/project/:id`
-
-Returns a project with its features and feedback. **Enforces account isolation** - users can only access projects from their account.
+Returns project with features, feedback, and timeline data.
 
 **Parameters:**
 - `id` (path) - Project UUID
 
-**Permissions:** All authenticated users can view projects in their account. Returns 403 if project belongs to a different account.
+**Permissions:** Authenticated users; project must belong to user's account
 
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    project: ProjectResponse
-    features: FeatureResponse[] // Sorted by start date, includes timeline fields
-    feedbackByFeature: Record<string, FeedbackResponse[]>
-    timeline?: {
-      dependencyChains: Array<{
-        featureId: string
-        chain: string[]
-        depth: number
-      }>
-      criticalPath: {
-        path: string[]
-        totalDuration: number
-        startDate: string
-        endDate: string
-      } | null
-      milestones: Array<{
-        date: string
-        features: string[]
-        description: string
-      }>
-      overlaps: Array<{
-        feature1: string
-        feature2: string
-        overlapDays: number
-      }>
+  "success": true,
+  "data": {
+    "project": {
+      "_id": "uuid",
+      "id": "uuid",
+      "name": "Project Name",
+      "description": "Project description",
+      "roadmap": {
+        "summary": "Roadmap summary",
+        "riskLevel": "medium"
+      },
+      "createdAt": "2024-01-01T00:00:00Z",
+      "createdBy": {
+        "name": "Creator Name",
+        "email": "creator@example.com"
+      }
+    },
+    "features": [
+      {
+        "_id": "uuid",
+        "id": "uuid",
+        "projectId": "uuid",
+        "title": "Feature Title",
+        "description": "Feature description",
+        "status": "not_started",
+        "priority": "high",
+        "effortEstimateWeeks": 2,
+        "dependsOn": [],
+        "assignedTo": "user-uuid",
+        "reporter": "user-uuid",
+        "storyPoints": 5,
+        "labels": ["frontend", "ui"],
+        "acceptanceCriteria": "Criteria here",
+        "ticketType": "feature",
+        "startDate": "2024-01-01",
+        "endDate": "2024-01-15",
+        "duration": 14,
+        "isOnCriticalPath": true,
+        "slackDays": 0,
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "feedbackByFeature": {
+      "feature-uuid": [
+        {
+          "_id": "uuid",
+          "id": "uuid",
+          "projectId": "uuid",
+          "featureId": "uuid",
+          "userId": {
+            "name": "User Name",
+            "email": "user@example.com"
+          },
+          "type": "comment",
+          "content": "Feedback content",
+          "status": "pending",
+          "createdAt": "2024-01-01T00:00:00Z"
+        }
+      ]
+    },
+    "timeline": {
+      "dependencyChains": [
+        {
+          "featureId": "uuid",
+          "chain": ["uuid1", "uuid2"],
+          "depth": 2
+        }
+      ],
+      "criticalPath": {
+        "path": ["uuid1", "uuid2", "uuid3"],
+        "totalDuration": 42,
+        "startDate": "2024-01-01",
+        "endDate": "2024-02-12"
+      },
+      "milestones": [
+        {
+          "date": "2024-01-15",
+          "features": ["uuid1", "uuid2"],
+          "description": "2 features completing"
+        }
+      ],
+      "overlaps": [
+        {
+          "feature1": "uuid1",
+          "feature2": "uuid2",
+          "overlapDays": 5
+        }
+      ]
     }
   }
 }
 ```
 
-**Note:** Features are sorted by start date. Timeline data includes:
-- **dependencyChains**: All dependency chains in the project
-- **criticalPath**: The longest path through the dependency graph (critical path)
-- **milestones**: Dates when multiple features complete
-- **overlaps**: Features that overlap in time
-
-**Example:**
-```bash
-GET /api/project/123e4567-e89b-12d3-a456-426614174000
-```
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Project not accessible (different account)
+- `404 NOT_FOUND` - Project not found
+- `400 BAD_REQUEST` - Invalid project ID format
 
 ---
 
-## Roadmap
+# Roadmap
 
-### Generate Roadmap
+## POST `/api/roadmap/generate`
 
-**POST** `/api/roadmap/generate`
+AI-generates a project with features using Google Gemini. Creates project and features under user's `account_id`.
 
-Generates a roadmap for a new project using AI. **Projects and features are automatically created with the user's account_id** for account isolation. Features include Jira-style fields (ticket type, story points, labels, acceptance criteria) generated by AI.
-
-**Permissions:** All authenticated users can generate roadmaps. Projects are created in the user's account.
+**Permissions:** PM or Admin only
 
 **Request Body:**
-```typescript
-{
-  projectName: string
-  projectDescription: string
-}
-```
-
-**Response:**
-```typescript
-{
-  success: true,
-  data: {
-    project: ProjectResponse
-    features: FeatureResponse[] // Includes Jira-style fields
-  }
-}
-```
-
-**Example:**
-```bash
-POST /api/roadmap/generate
-Content-Type: application/json
-
+```json
 {
   "projectName": "My New Project",
-  "projectDescription": "A description of the project"
+  "projectDescription": "A detailed description of the project goals and requirements"
 }
 ```
 
-**Note:** Generated features will include:
-- `ticketType`: AI-determined type (feature, epic, story, bug)
-- `storyPoints`: AI-estimated story points (Fibonacci scale)
-- `labels`: AI-generated labels based on feature content
-- `acceptanceCriteria`: AI-generated acceptance criteria
-- `reporter`: Set to the user creating the roadmap
-- `assignedTo`: null (not assigned during generation)
-
----
-
-## Features
-
-### Create Feature
-
-**POST** `/api/feature/create`
-
-Creates a new feature/ticket manually. **Enforces account isolation** - users can only create features for projects in their account.
-
-**Permissions:** All authenticated users in the same account can create features. Returns 403 if project belongs to a different account.
-
-**Request Body:**
-```typescript
-{
-  projectId: string
-  title: string
-  description: string
-  priority: string // 'P0' | 'P1' | 'P2'
-  effortEstimateWeeks: number
-  dependsOn?: string[] // Array of feature UUIDs
-  assignedTo?: string | null // User UUID
-  storyPoints?: number | null // Story points estimate
-  labels?: string[] // Array of label strings
-  acceptanceCriteria?: string | null // Acceptance criteria text
-  ticketType?: 'feature' | 'bug' | 'epic' | 'story' // Defaults to 'feature'
-}
-```
+**Validation:**
+- `projectName` (required) - Non-empty string
+- `projectDescription` (required) - Non-empty string
 
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    feature: FeatureResponse
+  "success": true,
+  "data": {
+    "project": {
+      "_id": "uuid",
+      "id": "uuid",
+      "name": "My New Project",
+      "description": "Project description",
+      "roadmap": {
+        "summary": "AI-generated roadmap summary",
+        "riskLevel": "medium"
+      },
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    "features": [
+      {
+        "_id": "uuid",
+        "id": "uuid",
+        "projectId": "uuid",
+        "title": "Feature Title",
+        "description": "Feature description",
+        "status": "not_started",
+        "priority": "high",
+        "effortEstimateWeeks": 2,
+        "ticketType": "feature",
+        "storyPoints": 5,
+        "labels": ["backend"],
+        "acceptanceCriteria": "Criteria here"
+      }
+    ]
   }
 }
 ```
 
-**Example:**
-```bash
-POST /api/feature/create
-Content-Type: application/json
-
-{
-  "projectId": "123e4567-e89b-12d3-a456-426614174000",
-  "title": "Add user authentication",
-  "description": "Implement OAuth2 authentication flow",
-  "priority": "P0",
-  "effortEstimateWeeks": 2,
-  "ticketType": "feature",
-  "storyPoints": 8,
-  "labels": ["backend", "security"],
-  "acceptanceCriteria": "User can log in with Google OAuth and receive JWT token"
-}
-```
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin
+- `400 BAD_REQUEST` - Missing or invalid request body
+- `500 INTERNAL_ERROR` - AI generation failed or database error
 
 ---
 
-### Update Feature
+# Features
 
-**PATCH** `/api/feature/:id`
+## POST `/api/feature/create`
 
-Updates a feature's properties. **Enforces account isolation** - users can only update features from their account.
+Creates a feature in a project under the same `account_id`.
+
+**Permissions:** PM or Admin only
+
+**Request Body:**
+```json
+{
+  "projectId": "uuid",
+  "title": "Feature Title",
+  "description": "Feature description",
+  "priority": "high",
+  "effortEstimateWeeks": 2,
+  "dependsOn": ["uuid1", "uuid2"],
+  "assignedTo": "user-uuid",
+  "storyPoints": 5,
+  "labels": ["frontend", "ui"],
+  "acceptanceCriteria": "Acceptance criteria here",
+  "ticketType": "feature"
+}
+```
+
+**Validation:**
+- `projectId` (required) - Valid UUID
+- `title` (required) - Non-empty string
+- `description` (required) - Non-empty string
+- `priority` (required) - One of: `critical`, `high`, `medium`, `low`
+- `effortEstimateWeeks` (required) - Positive integer
+- `dependsOn` (optional) - Array of feature UUIDs
+- `assignedTo` (optional) - User UUID or null
+- `storyPoints` (optional) - Non-negative integer or null
+- `labels` (optional) - Array of strings
+- `acceptanceCriteria` (optional) - String or null
+- `ticketType` (optional) - One of: `feature`, `bug`, `epic`, `story` (default: `feature`)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "feature": {
+      "_id": "uuid",
+      "id": "uuid",
+      "projectId": "uuid",
+      "title": "Feature Title",
+      "description": "Feature description",
+      "status": "not_started",
+      "priority": "high",
+      "effortEstimateWeeks": 2,
+      "dependsOn": ["uuid1", "uuid2"],
+      "assignedTo": "user-uuid",
+      "storyPoints": 5,
+      "labels": ["frontend", "ui"],
+      "acceptanceCriteria": "Acceptance criteria here",
+      "ticketType": "feature",
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin, or project not accessible
+- `404 NOT_FOUND` - Project not found
+- `400 BAD_REQUEST` - Invalid request data
+
+## PATCH `/api/feature/:id`
+
+Updates any feature fields. Feature must belong to user's `account_id`.
 
 **Parameters:**
 - `id` (path) - Feature UUID
 
-**Permissions:** All authenticated users in the same account can update features. Returns 403 if feature belongs to a different account.
+**Permissions:** PM or Admin only
 
 **Request Body:**
-```typescript
+```json
 {
-  status?: string
-  priority?: string
-  title?: string
-  description?: string
-  effortEstimateWeeks?: number
-  dependsOn?: string[]
-  assignedTo?: string | null // User UUID
-  reporter?: string | null // User UUID
-  storyPoints?: number | null // Story points estimate
-  labels?: string[] // Array of label strings
-  acceptanceCriteria?: string | null // Acceptance criteria text
-  ticketType?: 'feature' | 'bug' | 'epic' | 'story'
+  "status": "in_progress",
+  "priority": "critical",
+  "title": "Updated Title",
+  "description": "Updated description",
+  "effortEstimateWeeks": 3,
+  "dependsOn": ["uuid1"],
+  "assignedTo": "user-uuid",
+  "storyPoints": 8,
+  "labels": ["backend", "api"],
+  "acceptanceCriteria": "Updated criteria",
+  "ticketType": "bug"
 }
 ```
 
+**Validation:**
+- All fields are optional
+- `status` - One of: `not_started`, `in_progress`, `blocked`, `complete`
+- `priority` - One of: `critical`, `high`, `medium`, `low`
+- `effortEstimateWeeks` - Positive integer
+- `dependsOn` - Array of feature UUIDs
+- `assignedTo` - User UUID or null
+- `storyPoints` - Non-negative integer or null
+- `labels` - Array of strings
+- `ticketType` - One of: `feature`, `bug`, `epic`, `story`
+
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    feature: FeatureResponse
+  "success": true,
+  "data": {
+    "feature": {
+      "_id": "uuid",
+      "id": "uuid",
+      "projectId": "uuid",
+      "title": "Updated Title",
+      "status": "in_progress",
+      "priority": "critical",
+      // ... other fields
+    }
   }
 }
 ```
 
-**Example:**
-```bash
-PATCH /api/feature/123e4567-e89b-12d3-a456-426614174000
-Content-Type: application/json
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin, or feature not accessible
+- `404 NOT_FOUND` - Feature not found
+- `400 BAD_REQUEST` - Invalid request data
 
+## POST `/api/feature/suggest-assignee`
+
+AI-powered assignee suggestions using Google Gemini. Suggests engineers in the same account, excluding those on vacation, based on specialization, workload, and past experience.
+
+**Permissions:** PM or Admin only
+
+**Request Body (Option 1 - Task Context):**
+```json
 {
-  "status": "active",
-  "priority": "P0",
-  "assignedTo": "223e4567-e89b-12d3-a456-426614174000",
-  "storyPoints": 5
+  "taskTitle": "Implement user authentication",
+  "taskDescription": "Add OAuth2 authentication with Google and GitHub",
+  "taskLabels": ["backend", "security"],
+  "taskType": "feature",
+  "projectId": "uuid"
 }
 ```
 
-### Suggest Assignee (AI-Powered)
-
-**POST** `/api/feature/suggest-assignee`
-
-**Phase 9: AI Smart Assignment Suggestions**
-
-Get AI-powered assignment suggestions for a task or feature. Uses Gemini AI to analyze task requirements, engineer specializations, workload, and project history to recommend the best assignees.
-
-**Permissions:** PM or Admin role required. **Enforces account isolation** - only suggests engineers from the same account.
-
-**Request Body:**
-```typescript
+**Request Body (Option 2 - Feature ID):**
+```json
 {
-  taskTitle: string // Required: Title of the task
-  taskDescription: string // Required: Description of the task
-  taskLabels?: string[] // Optional: Labels associated with the task
-  taskType?: 'feature' | 'bug' | 'epic' | 'story' // Optional: Type of ticket
-  projectId?: string // Optional: Project UUID for project history context
-  featureId?: string // Optional: Feature UUID - if provided, uses feature context instead of taskTitle/taskDescription
+  "featureId": "uuid"
 }
 ```
+
+**Validation:**
+- Either `taskTitle` + `taskDescription` OR `featureId` required
+- `taskType` (optional) - One of: `feature`, `bug`, `epic`, `story`
+- `taskLabels` (optional) - Array of strings
+- `projectId` (optional) - Valid UUID
+- `featureId` (optional) - Valid UUID
 
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    suggestion: {
-      requiredSpecialization: 'Backend' | 'Frontend' | 'QA' | 'DevOps' | 'General' | null,
-      recommendations: [
+  "success": true,
+  "data": {
+    "suggestion": {
+      "requiredSpecialization": "Backend",
+      "recommendations": [
         {
-          engineerId: string,
-          engineerName: string,
-          reasoning: string, // AI explanation for why this engineer is recommended
-          confidenceScore: number, // 0-100 confidence score
-          matchFactors: {
-            specializationMatch: boolean,
-            workloadSuitable: boolean,
-            pastExperience: boolean
+          "engineerId": "user-uuid",
+          "engineerName": "John Doe",
+          "reasoning": "Has experience with OAuth2 and backend security",
+          "confidenceScore": 0.85,
+          "matchFactors": {
+            "specializationMatch": true,
+            "workloadSuitable": true,
+            "pastExperience": true
           }
         }
       ]
@@ -345,379 +481,552 @@ Get AI-powered assignment suggestions for a task or feature. Uses Gemini AI to a
 }
 ```
 
-**Notes:**
-- Automatically excludes engineers who are on vacation
-- Analyzes project history (if `projectId` is provided) to infer past assignment patterns
-- Considers specialization match, current workload, and past experience
-- Returns top 3 recommendations sorted by confidence score
-- If `featureId` is provided, uses the feature's title, description, labels, and ticket type instead of the request body fields
-
-**Example:**
-```bash
-POST /api/feature/suggest-assignee
-Content-Type: application/json
-
-{
-  "taskTitle": "Implement OAuth2 authentication",
-  "taskDescription": "Add OAuth2 authentication flow with Google and GitHub providers. Requires backend API integration and frontend UI components.",
-  "taskLabels": ["backend", "frontend", "security"],
-  "taskType": "feature",
-  "projectId": "123e4567-e89b-12d3-a456-426614174000"
-}
-```
-
-**Example with featureId:**
-```bash
-POST /api/feature/suggest-assignee
-Content-Type: application/json
-
-{
-  "featureId": "223e4567-e89b-12d3-a456-426614174000",
-  "projectId": "123e4567-e89b-12d3-a456-426614174000"
-}
-```
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin
+- `404 NOT_FOUND` - Feature or project not found
+- `400 BAD_REQUEST` - Invalid request data
+- `500 INTERNAL_ERROR` - AI suggestion failed
 
 ---
 
-## Feedback
+# Feedback
 
-### Create Feedback
+## POST `/api/feedback/create`
 
-**POST** `/api/feedback/create`
+Creates a comment or timeline proposal on a feature.
 
-Creates a new feedback entry (comment or proposal) for a feature. **Enforces account isolation** - users can only create feedback for features in their account.
-
-**Permissions:** All authenticated users can create feedback. Feedback is automatically associated with the user's account_id.
+**Permissions:** Engineers, PMs, and Admins (Viewers cannot create feedback)
 
 **Request Body:**
-```typescript
+```json
 {
-  projectId: string
-  featureId: string
-  type: 'comment' | 'timeline_proposal'
-  content: string
-  proposedRoadmap?: any
-}
-```
-
-**Response:**
-```typescript
-{
-  success: true,
-  data: {
-    feedback: FeedbackResponse
-  }
-}
-```
-
-**Example:**
-```bash
-POST /api/feedback/create
-Content-Type: application/json
-
-{
-  "projectId": "123e4567-e89b-12d3-a456-426614174000",
-  "featureId": "223e4567-e89b-12d3-a456-426614174000",
+  "projectId": "uuid",
+  "featureId": "uuid",
   "type": "comment",
-  "content": "This feature needs more work"
+  "content": "This feature needs more clarification on the API design.",
+  "proposedRoadmap": null
 }
 ```
 
----
+**For Timeline Proposal:**
+```json
+{
+  "projectId": "uuid",
+  "featureId": "uuid",
+  "type": "timeline_proposal",
+  "content": "I propose extending the timeline by 2 weeks due to complexity",
+  "proposedRoadmap": {
+    "features": [
+      {
+        "id": "uuid",
+        "startDate": "2024-01-15",
+        "endDate": "2024-02-15",
+        "duration": 30
+      }
+    ]
+  }
+}
+```
 
-### Approve Feedback
+**Validation:**
+- `projectId` (required) - Valid UUID
+- `featureId` (required) - Valid UUID
+- `type` (required) - One of: `comment`, `timeline_proposal`
+- `content` (required) - Non-empty string
+- `proposedRoadmap` (optional) - Object (required if type is `timeline_proposal`)
 
-**POST** `/api/feedback/approve`
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "feedback": {
+      "_id": "uuid",
+      "id": "uuid",
+      "projectId": "uuid",
+      "featureId": "uuid",
+      "userId": {
+        "name": "User Name",
+        "email": "user@example.com"
+      },
+      "type": "comment",
+      "content": "Feedback content",
+      "proposedRoadmap": null,
+      "aiAnalysis": null,
+      "status": "pending",
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  }
+}
+```
 
-Approves a feedback proposal. **Enforces account isolation and role-based permissions** - only PMs and admins can approve proposals, and only for feedback in their account.
+**Note:** If `type` is `timeline_proposal`, AI analysis is automatically generated and included in `aiAnalysis` field.
 
-**Permissions:** PM or Admin role required. Returns 403 if user is not PM/Admin or if feedback belongs to a different account.
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Viewer role (read-only)
+- `404 NOT_FOUND` - Project or feature not found
+- `400 BAD_REQUEST` - Invalid request data
+
+## POST `/api/feedback/approve`
+
+Approves a timeline proposal and applies changes to the roadmap.
+
+**Permissions:** PM or Admin only
 
 **Request Body:**
-```typescript
+```json
 {
-  feedbackId: string
+  "feedbackId": "uuid"
 }
 ```
 
+**Validation:**
+- `feedbackId` (required) - Valid UUID
+
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    message: string
-    feedback: FeedbackResponse
+  "success": true,
+  "data": {
+    "message": "Proposal approved and roadmap updated",
+    "feedback": {
+      "_id": "uuid",
+      "id": "uuid",
+      "status": "approved",
+      // ... other fields
+    }
   }
 }
 ```
 
-**Example:**
-```bash
-POST /api/feedback/approve
-Content-Type: application/json
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin, or feedback not accessible
+- `404 NOT_FOUND` - Feedback not found
+- `400 BAD_REQUEST` - Invalid request data or feedback is not a proposal
 
-{
-  "feedbackId": "323e4567-e89b-12d3-a456-426614174000"
-}
-```
+## POST `/api/feedback/reject`
 
----
+Rejects a timeline proposal.
 
-### Reject Feedback
-
-**POST** `/api/feedback/reject`
-
-Rejects a feedback proposal. **Enforces account isolation and role-based permissions** - only PMs and admins can reject proposals, and only for feedback in their account.
-
-**Permissions:** PM or Admin role required. Returns 403 if user is not PM/Admin or if feedback belongs to a different account.
+**Permissions:** PM or Admin only
 
 **Request Body:**
-```typescript
+```json
 {
-  feedbackId: string
+  "feedbackId": "uuid"
 }
 ```
 
+**Validation:**
+- `feedbackId` (required) - Valid UUID
+
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    message: string
-    feedback: FeedbackResponse
+  "success": true,
+  "data": {
+    "message": "Proposal rejected",
+    "feedback": {
+      "_id": "uuid",
+      "id": "uuid",
+      "status": "rejected",
+      // ... other fields
+    }
   }
 }
 ```
 
-**Example:**
-```bash
-POST /api/feedback/reject
-Content-Type: application/json
-
-{
-  "feedbackId": "323e4567-e89b-12d3-a456-426614174000"
-}
-```
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin, or feedback not accessible
+- `404 NOT_FOUND` - Feedback not found
+- `400 BAD_REQUEST` - Invalid request data
 
 ---
 
-## User Profile
+# User Profile
 
-### Get User Profile
+## GET `/api/user/profile`
 
-**GET** `/api/user/profile`
+Returns the current authenticated user's profile with workload metrics.
 
-Returns the current user's profile with workload metrics. **Enforces account isolation** - users can only view their own profile.
-
-**Permissions:** All authenticated users can view their own profile.
+**Permissions:** All authenticated users
 
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    profile: UserProfileResponse
+  "success": true,
+  "data": {
+    "profile": {
+      "_id": "uuid",
+      "id": "uuid",
+      "auth0_id": "auth0|...",
+      "email": "user@example.com",
+      "name": "User Name",
+      "role": "engineer",
+      "account_id": "account-id",
+      "team_id": "team-id",
+      "specialization": "Backend",
+      "vacationDates": [
+        {
+          "start": "2024-12-20",
+          "end": "2024-12-31"
+        }
+      ],
+      "currentTicketCount": 5,
+      "currentStoryPointCount": 25,
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
   }
 }
 ```
 
-**Example:**
-```bash
-GET /api/user/profile
-```
+**Workload Metrics:**
+- `currentTicketCount` - Number of assigned features (excluding completed)
+- `currentStoryPointCount` - Sum of story points for assigned features (excluding completed)
 
----
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `500 INTERNAL_ERROR` - Database error
 
-### Update User Profile
+## PATCH `/api/user/profile`
 
-**PATCH** `/api/user/profile`
+Updates the current user's profile (role, specialization, vacation dates).
 
-Updates the current user's profile. Users can only update their own profile. **Enforces account isolation** - users cannot update other users' profiles.
-
-**Permissions:** All authenticated users can update their own profile.
+**Permissions:** All authenticated users (can update their own profile)
 
 **Request Body:**
-```typescript
-{
-  role?: 'admin' | 'pm' | 'engineer' | 'viewer'
-  specialization?: string | null // 'Backend', 'Frontend', 'QA', 'DevOps', or null
-  vacationDates?: Array<{ start: string, end: string }> | null // ISO date strings
-}
-```
-
-**Response:**
-```typescript
-{
-  success: true,
-  data: {
-    profile: UserProfileResponse
-  }
-}
-```
-
-**Example:**
-```bash
-PATCH /api/user/profile
-Content-Type: application/json
-
+```json
 {
   "role": "engineer",
   "specialization": "Backend",
   "vacationDates": [
     {
-      "start": "2024-12-25",
+      "start": "2024-12-20",
       "end": "2024-12-31"
     }
   ]
 }
 ```
 
-**Validation Rules:**
-- `role` must be one of: `admin`, `pm`, `engineer`, `viewer`
-- `specialization` can only be set for engineers (`Backend`, `Frontend`, `QA`, `DevOps`)
-- If role is changed to non-engineer, specialization is automatically cleared
-- `vacationDates` must be an array of objects with `start` and `end` ISO date strings
+**Validation:**
+- `role` (optional) - One of: `admin`, `pm`, `engineer`, `viewer`
+- `specialization` (optional) - One of: `Backend`, `Frontend`, `QA`, `DevOps`, or `null`
+- `vacationDates` (optional) - Array of `{start: string, end: string}` or `null`
+
+**Rules:**
+- Specialization is only valid for engineers
+- Switching role away from engineer clears specialization
+- Vacation dates must be valid ISO date strings
 - Start date must be before or equal to end date
 
----
-
-## Team Management
-
-### Get Team Members
-
-**GET** `/api/team/members`
-
-Returns all team members in the current user's account with their roles, specializations, workload metrics, and vacation status. **Enforces account isolation** - users only see team members from their account.
-
-**Permissions:** All authenticated users can view team members in their account.
-
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    members: TeamMemberResponse[]
+  "success": true,
+  "data": {
+    "profile": {
+      "_id": "uuid",
+      "id": "uuid",
+      "role": "engineer",
+      "specialization": "Backend",
+      "vacationDates": [
+        {
+          "start": "2024-12-20",
+          "end": "2024-12-31"
+        }
+      ],
+      // ... other fields
+    }
   }
 }
 ```
 
-**Example:**
-```bash
-GET /api/team/members
-```
-
-**Note:** Workload metrics (currentTicketCount, currentStoryPointCount) are computed on-the-fly based on features assigned to each user. Only non-completed features are counted.
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `400 BAD_REQUEST` - Invalid request data (invalid role, specialization, or dates)
 
 ---
 
-### Get Available Team Members
+# Team
 
-**GET** `/api/team/members/available`
+## GET `/api/team/members`
 
-Returns all available team members in the current user's account, excluding users who are currently on vacation. **Enforces account isolation** - users only see team members from their account.
+Returns all users in the same account with their roles, specializations, workload, and vacation status.
 
-**Permissions:** All authenticated users can view available team members in their account.
+**Permissions:** All authenticated users
 
 **Response:**
-```typescript
+```json
 {
-  success: true,
-  data: {
-    members: TeamMemberResponse[]
+  "success": true,
+  "data": {
+    "members": [
+      {
+        "_id": "uuid",
+        "id": "uuid",
+        "email": "user@example.com",
+        "name": "User Name",
+        "role": "engineer",
+        "specialization": "Backend",
+        "vacationDates": [
+          {
+            "start": "2024-12-20",
+            "end": "2024-12-31"
+          }
+        ],
+        "currentTicketCount": 5,
+        "currentStoryPointCount": 25,
+        "isOnVacation": false,
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ]
   }
 }
 ```
 
-**Example:**
-```bash
-GET /api/team/members/available
-```
+**Fields:**
+- `isOnVacation` - `true` if user is currently on vacation (today is within any vacation date range)
+- `currentTicketCount` - Number of assigned features (excluding completed)
+- `currentStoryPointCount` - Sum of story points for assigned features (excluding completed)
 
-**Note:** This endpoint filters out users who are currently on vacation based on their `vacationDates`. Workload metrics (currentTicketCount, currentStoryPointCount) are computed on-the-fly based on features assigned to each user. Only non-completed features are counted.
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `500 INTERNAL_ERROR` - Database error
+
+## GET `/api/team/members/available`
+
+Returns all users in the same account, excluding those currently on vacation.
+
+**Permissions:** All authenticated users
+
+**Query Parameters:** None
+
+**Response:**
+Same format as `/api/team/members`, but only includes users where `isOnVacation` is `false`.
+
+**Use Case:** Useful for assignment suggestions and workload planning when you need to exclude unavailable team members.
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `500 INTERNAL_ERROR` - Database error
 
 ---
 
-## Type Definitions
+# Chat (Phase 11: AI-Powered Chatbot)
 
-### ProjectResponse
+## POST `/api/chat/generate-tickets`
+
+AI-powered conversational ticket generation. Enables PMs to have an ongoing conversation with AI to generate, modify, and refine tickets interactively.
+
+**Permissions:** PM or Admin only
+
+**Request Body:**
+```json
+{
+  "projectId": "uuid",
+  "message": "Add authentication feature with OAuth2 support",
+  "conversationHistory": [
+    {
+      "role": "user",
+      "content": "I need to add authentication",
+      "timestamp": "2024-01-01T00:00:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": "I'll help you add authentication. What authentication methods do you need?",
+      "timestamp": "2024-01-01T00:00:01Z"
+    }
+  ]
+}
+```
+
+**Validation:**
+- `projectId` (required) - Valid UUID
+- `message` (required) - Non-empty string
+- `conversationHistory` (optional) - Array of chat messages with role, content, and timestamp
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "I've generated ticket suggestions for authentication with OAuth2 support.",
+    "suggestedTickets": [
+      {
+        "title": "Implement OAuth2 Authentication",
+        "description": "Add OAuth2 authentication with Google and GitHub providers",
+        "priority": "high",
+        "effortEstimateWeeks": 2,
+        "ticketType": "feature",
+        "storyPoints": 8,
+        "labels": ["backend", "security", "authentication"],
+        "acceptanceCriteria": "Users can authenticate using Google and GitHub OAuth2",
+        "dependsOn": [],
+        "assignedTo": "user-uuid",
+        "confidenceScore": 85
+      }
+    ],
+    "confidenceScores": [85]
+  }
+}
+```
+
+**Features:**
+- Understands conversational commands like "add auth to sprint 2", "change priority of ticket 3"
+- References existing features in the project
+- Suggests appropriate assignments based on engineer availability and specialization
+- Maintains conversation context through history
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin
+- `404 NOT_FOUND` - Project not found
+- `400 BAD_REQUEST` - Invalid request data
+- `500 INTERNAL_ERROR` - AI generation failed or database error
+
+## POST `/api/chat/apply-tickets`
+
+Bulk create tickets from AI chat suggestions. Creates multiple tickets with AI-suggested assignments in a single operation.
+
+**Permissions:** PM or Admin only
+
+**Request Body:**
+```json
+{
+  "projectId": "uuid",
+  "tickets": [
+    {
+      "title": "Implement OAuth2 Authentication",
+      "description": "Add OAuth2 authentication with Google and GitHub providers",
+      "priority": "high",
+      "effortEstimateWeeks": 2,
+      "ticketType": "feature",
+      "storyPoints": 8,
+      "labels": ["backend", "security"],
+      "acceptanceCriteria": "Users can authenticate using Google and GitHub OAuth2",
+      "dependsOn": [],
+      "assignedTo": "user-uuid",
+      "confidenceScore": 85
+    }
+  ]
+}
+```
+
+**Validation:**
+- `projectId` (required) - Valid UUID
+- `tickets` (required) - Non-empty array of ticket objects
+- Each ticket must have: `title`, `description`, `priority`, `effortEstimateWeeks`
+- `dependsOn` must reference existing feature IDs in the project
+- `assignedTo` must reference a valid user in the same account
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "createdTicketIds": ["uuid1", "uuid2"],
+    "message": "Successfully created 2 ticket(s)"
+  }
+}
+```
+
+**Features:**
+- Bulk creates multiple tickets in a single operation
+- Automatically suggests assignments if not provided (using AI assignment suggestions)
+- Validates dependencies against existing features
+- Enforces account isolation for all operations
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin
+- `404 NOT_FOUND` - Project not found
+- `400 BAD_REQUEST` - Invalid request data (invalid dependencies, missing fields)
+- `500 INTERNAL_ERROR` - Database error or assignment suggestion failed
+
+---
+
+# Type Definitions
+
+## ProjectResponse
 
 ```typescript
-interface ProjectResponse {
+{
   _id: string
   id: string
   name: string
   description: string
   roadmap: {
     summary: string
-    riskLevel: string
+    riskLevel: 'low' | 'medium' | 'high'
   }
   createdAt: string
   createdBy?: {
-    _id: string
     name: string
     email: string
   } | null
-  created_by?: string
   team_id?: string
 }
 ```
 
-### FeatureResponse
+## FeatureResponse
 
 ```typescript
-interface FeatureResponse {
+{
   _id: string
   id: string
   projectId: string
   title: string
   description: string
-  status: string
-  priority: string
+  status: 'not_started' | 'in_progress' | 'blocked' | 'complete'
+  priority: 'critical' | 'high' | 'medium' | 'low'
   effortEstimateWeeks: number
   dependsOn: string[]
   createdAt: string
-  // Jira-style fields (Phase 6)
-  assignedTo?: string | null // User UUID
-  reporter?: string | null // User UUID
-  storyPoints?: number | null // Story points estimate
-  labels?: string[] // Array of label strings
-  acceptanceCriteria?: string | null // Acceptance criteria text
-  ticketType?: 'feature' | 'bug' | 'epic' | 'story' // Ticket type
-  // Timeline fields (Phase 7)
-  startDate?: string | null // ISO date string
-  endDate?: string | null // ISO date string
-  duration?: number | null // Duration in days
-  isOnCriticalPath?: boolean // Whether feature is on critical path
-  slackDays?: number // Slack time in days
+  // Jira-style fields
+  assignedTo?: string | null
+  reporter?: string | null
+  storyPoints?: number | null
+  labels?: string[]
+  acceptanceCriteria?: string | null
+  ticketType?: 'feature' | 'bug' | 'epic' | 'story'
+  // Timeline fields
+  startDate?: string | null
+  endDate?: string | null
+  duration?: number | null
+  isOnCriticalPath?: boolean
+  slackDays?: number
 }
 ```
 
-### FeedbackResponse
+## FeedbackResponse
 
 ```typescript
-interface FeedbackResponse {
+{
   _id: string
   id: string
   projectId: string
   featureId: string
   userId: {
-    _id: string
     name: string
     email: string
   } | null
-  type: string
+  type: 'comment' | 'timeline_proposal'
   content: string
   proposedRoadmap?: any
   aiAnalysis?: string
-  status: string
+  status: 'pending' | 'approved' | 'rejected'
   createdAt: string
 }
 ```
 
-### UserProfileResponse
+## UserProfileResponse
 
 ```typescript
-interface UserProfileResponse {
+{
   _id: string
   id: string
   auth0_id: string
@@ -726,74 +1035,78 @@ interface UserProfileResponse {
   role: 'admin' | 'pm' | 'engineer' | 'viewer'
   account_id: string
   team_id?: string
-  specialization?: string | null
-  vacationDates?: Array<{ start: string, end: string }>
+  specialization?: 'Backend' | 'Frontend' | 'QA' | 'DevOps' | null
+  vacationDates?: Array<{ start: string; end: string }>
   currentTicketCount?: number
   currentStoryPointCount?: number
   createdAt: string
 }
 ```
 
-### TeamMemberResponse
+## TeamMemberResponse
 
-```typescript
-interface TeamMemberResponse {
-  _id: string
-  id: string
-  email: string
-  name: string
-  role: 'admin' | 'pm' | 'engineer' | 'viewer'
-  specialization?: string | null
-  vacationDates?: Array<{ start: string, end: string }>
-  currentTicketCount: number
-  currentStoryPointCount: number
-  isOnVacation: boolean
-  createdAt: string
-}
-```
+Same as `UserProfileResponse` but includes:
+- `isOnVacation: boolean` - Whether user is currently on vacation
 
----
-
-## Permissions
-
-### Roles
-
-- `admin` - Full access to all projects
-- `pm` - Can create projects and approve/reject proposals
-- `engineer` - Can create feedback and proposals (can have specialization: Backend, Frontend, QA, DevOps)
-- `viewer` - Read-only access
-
-### Specializations
-
-- `Backend` - Backend development specialization (engineers only)
-- `Frontend` - Frontend development specialization (engineers only)
-- `QA` - Quality Assurance specialization (engineers only)
-- `DevOps` - DevOps specialization (engineers only)
-
-### Access Control
-
-- Users can only access projects they created or are part of the team
-- Only PMs and admins can approve/reject proposals
-- All authenticated users can create feedback
-
----
-
-## Error Handling
-
-All errors are returned in the standard response format:
+## ChatMessage (Phase 11)
 
 ```typescript
 {
-  success: false,
-  error: string
-  code?: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string // ISO date string
 }
 ```
 
-Common error codes:
-- `UNAUTHORIZED` - User is not authenticated
-- `FORBIDDEN` - User does not have permission
-- `NOT_FOUND` - Resource not found
-- `BAD_REQUEST` - Invalid request data
-- `INTERNAL_ERROR` - Server error
+## SuggestedTicket (Phase 11)
+
+```typescript
+{
+  title: string
+  description: string
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  effortEstimateWeeks: number
+  ticketType?: 'feature' | 'bug' | 'epic' | 'story'
+  storyPoints?: number | null
+  labels?: string[]
+  acceptanceCriteria?: string | null
+  dependsOn?: string[] // Array of existing feature IDs
+  assignedTo?: string | null // User ID (AI-suggested)
+  confidenceScore?: number // 0-100
+}
+```
+
+## GenerateTicketsResponse (Phase 11)
+
+```typescript
+{
+  message: string // AI's conversational response
+  suggestedTickets: SuggestedTicket[]
+  confidenceScores?: number[]
+}
+```
+
+## ApplyTicketsResponse (Phase 11)
+
+```typescript
+{
+  createdTicketIds: string[]
+  message: string
+}
+```
+
+---
+
+# Rate Limiting
+
+Currently, there are no rate limits enforced. However, AI endpoints (roadmap generation, assignment suggestions) are subject to Google Gemini API rate limits.
+
+# Real-time Events
+
+The application uses Supabase Realtime for live updates. When data changes in the database, connected clients automatically receive updates via WebSocket subscriptions. No additional API calls are needed for real-time updates.
+
+**Subscribed Tables:**
+- `projects` - Project list updates
+- `features` - Feature status/assignment changes
+- `feedback` - New feedback and status changes
 

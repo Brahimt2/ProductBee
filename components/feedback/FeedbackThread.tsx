@@ -1,13 +1,16 @@
 'use client'
 
-import { MessageSquare, User, Clock, CheckCircle, XCircle } from 'lucide-react'
-import type { FeedbackResponse } from '@/types'
+import { MessageSquare, User, Clock, CheckCircle, XCircle, FileText } from 'lucide-react'
+import ProposalApprovalView from './ProposalApprovalView'
+import type { FeedbackResponse, ProjectResponse, FeatureResponse } from '@/types'
 
 interface FeedbackThreadProps {
   feedback: FeedbackResponse[]
   onApprove?: (feedbackId: string) => void
   onReject?: (feedbackId: string) => void
   canApprove?: boolean
+  project?: ProjectResponse
+  features?: FeatureResponse[]
 }
 
 export default function FeedbackThread({
@@ -15,6 +18,8 @@ export default function FeedbackThread({
   onApprove,
   onReject,
   canApprove = false,
+  project,
+  features = [],
 }: FeedbackThreadProps) {
   if (feedback.length === 0) {
     return (
@@ -80,24 +85,40 @@ export default function FeedbackThread({
           <p className="text-gray-700 dark:text-gray-300 mb-3 whitespace-pre-wrap">
             {item.content}
           </p>
-          {item.aiAnalysis && (
-            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-              <p className="text-xs font-medium text-blue-900 dark:text-blue-200 mb-1">
-                AI Analysis:
-              </p>
-              <p className="text-sm text-blue-800 dark:text-blue-300 whitespace-pre-wrap">
-                {typeof item.aiAnalysis === 'string'
-                  ? (() => {
-                      try {
-                        const parsed = JSON.parse(item.aiAnalysis)
-                        return parsed.summary || item.aiAnalysis
-                      } catch {
-                        return item.aiAnalysis
-                      }
-                    })()
-                  : item.aiAnalysis}
-              </p>
+
+          {/* Enhanced Proposal View for PMs */}
+          {(item.type === 'proposal' || item.type === 'timeline_proposal') && project && canApprove ? (
+            <div className="mt-4">
+              <ProposalApprovalView
+                feedback={item}
+                project={project}
+                features={features}
+                onApprove={onApprove || (() => {})}
+                onReject={onReject || (() => {})}
+                canApprove={canApprove}
+              />
             </div>
+          ) : (
+            /* Simple AI Analysis Display for non-PMs or comments */
+            item.aiAnalysis && (
+              <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                <p className="text-xs font-medium text-blue-900 dark:text-blue-200 mb-1">
+                  AI Analysis:
+                </p>
+                <p className="text-sm text-blue-800 dark:text-blue-300 whitespace-pre-wrap">
+                  {typeof item.aiAnalysis === 'string'
+                    ? (() => {
+                        try {
+                          const parsed = JSON.parse(item.aiAnalysis)
+                          return parsed.summary || parsed.reasoning || item.aiAnalysis
+                        } catch {
+                          return item.aiAnalysis
+                        }
+                      })()
+                    : item.aiAnalysis}
+                </p>
+              </div>
+            )
           )}
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <Clock className="w-3 h-3" />

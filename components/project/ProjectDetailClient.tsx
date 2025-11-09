@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@auth0/nextjs-auth0/client'
-import { ArrowLeft, AlertCircle } from 'lucide-react'
-import { ROLES } from '@/lib/constants'
+import { ArrowLeft, AlertCircle, Sparkles } from 'lucide-react'
+import { ROLES, FEATURE_STATUS } from '@/lib/constants'
 import { useProject } from '@/hooks/useProject'
 import { useFeature } from '@/hooks/useFeature'
 import FeatureCard from './FeatureCard'
@@ -12,6 +12,8 @@ import FeatureModal from './FeatureModal'
 import TicketCreateForm from './TicketCreateForm'
 import GanttView from './GanttView'
 import ViewToggle, { type ViewType } from './ViewToggle'
+import ChatInterface from './ChatInterface'
+import TicketGenerationControls from './TicketGenerationControls'
 import type { GetProjectResponse, FeatureResponse } from '@/types'
 
 interface ProjectDetailClientProps {
@@ -26,12 +28,12 @@ const riskColors: Record<string, string> = {
   high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 }
 
-// Feature status columns
+// Feature status columns (using API format values)
 const columns = [
-  { id: 'backlog' as const, title: 'Backlog' },
-  { id: 'active' as const, title: 'In Progress' },
-  { id: 'blocked' as const, title: 'Blocked' },
-  { id: 'complete' as const, title: 'Complete' },
+  { id: FEATURE_STATUS.NOT_STARTED, title: 'Backlog' },
+  { id: FEATURE_STATUS.IN_PROGRESS, title: 'In Progress' },
+  { id: FEATURE_STATUS.BLOCKED, title: 'Blocked' },
+  { id: FEATURE_STATUS.COMPLETE, title: 'Complete' },
 ]
 
 export default function ProjectDetailClient({
@@ -42,6 +44,7 @@ export default function ProjectDetailClient({
   const { user } = useUser()
   const [selectedFeature, setSelectedFeature] = useState<FeatureResponse | null>(null)
   const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false)
+  const [isChatOpen, setIsChatOpen] = useState(false)
   
   // View state with localStorage persistence (default to 'gantt')
   const [currentView, setCurrentView] = useState<ViewType>(() => {
@@ -130,15 +133,36 @@ export default function ProjectDetailClient({
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              Roadmap Summary
-            </h2>
+            <div className="flex items-start justify-between mb-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                Roadmap Summary
+              </h2>
+              {isPMOrAdmin && (
+                <button
+                  onClick={() => setIsChatOpen(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Modify with AI
+                </button>
+              )}
+            </div>
             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
               {displayData.project.roadmap.summary}
             </p>
           </div>
         </div>
+
+        {/* AI Ticket Generation Controls */}
+        {isPMOrAdmin && (
+          <TicketGenerationControls
+            projectId={projectId}
+            onTicketsApplied={() => {
+              refetch()
+            }}
+          />
+        )}
 
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -147,12 +171,23 @@ export default function ProjectDetailClient({
           <div className="flex items-center gap-4">
             <ViewToggle currentView={currentView} onViewChange={setCurrentView} />
             {!isViewer && (
-              <button
-                onClick={() => setIsCreateTicketOpen(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                + Create Ticket
-              </button>
+              <>
+                {isPMOrAdmin && (
+                  <button
+                    onClick={() => setIsChatOpen(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI Chat
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsCreateTicketOpen(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  + Create Ticket
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -207,6 +242,8 @@ export default function ProjectDetailClient({
           userRole={userRole}
           canEdit={canEdit}
           canApprove={canApprove}
+          project={displayData.project}
+          features={displayData.features}
           onFeatureUpdate={() => {
             refetch()
             setSelectedFeature(null)
@@ -218,10 +255,23 @@ export default function ProjectDetailClient({
         isOpen={isCreateTicketOpen}
         onClose={() => setIsCreateTicketOpen(false)}
         projectId={displayData.project._id || displayData.project.id}
+        userRole={userRole}
         onSuccess={() => {
           refetch()
         }}
       />
+
+      {/* AI Chat Interface */}
+      {isPMOrAdmin && (
+        <ChatInterface
+          projectId={projectId}
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          onTicketsGenerated={() => {
+            refetch()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, MessageSquare, Send, Clock } from 'lucide-react'
+import { X, MessageSquare, Send, Clock, User } from 'lucide-react'
 import { ROLES } from '@/lib/constants'
 import { useFeedback } from '@/hooks/useFeedback'
+import { useFeature } from '@/hooks/useFeature'
+import { useTeamMembers } from '@/hooks/useTeamMembers'
+import EmployeeAssignmentDropdown from './EmployeeAssignmentDropdown'
 import FeedbackThread from '../feedback/FeedbackThread'
-import type { FeatureResponse, FeedbackResponse } from '@/types'
+import type { FeatureResponse, FeedbackResponse, ProjectResponse } from '@/types'
 
 interface FeatureModalProps {
   isOpen: boolean
@@ -17,6 +20,8 @@ interface FeatureModalProps {
   canEdit?: boolean
   canApprove?: boolean
   onFeatureUpdate?: () => void
+  project?: ProjectResponse
+  features?: FeatureResponse[]
 }
 
 // Priority color mapping
@@ -36,16 +41,25 @@ export default function FeatureModal({
   canEdit = true,
   canApprove = false,
   onFeatureUpdate,
+  project,
+  features = [],
 }: FeatureModalProps) {
   const [comment, setComment] = useState('')
   const [proposal, setProposal] = useState('')
   const [activeTab, setActiveTab] = useState<'comment' | 'proposal'>('comment')
   const { createFeedback, approveFeedback, rejectFeedback, isSubmitting } = useFeedback()
+  const { updateFeature, isUpdating } = useFeature()
+  const { members } = useTeamMembers()
 
   // Determine permissions if not explicitly provided
   const hasApprovePermission = canApprove || userRole === ROLES.PM || userRole === ROLES.ADMIN
   const hasEditPermission = canEdit && userRole !== ROLES.VIEWER
   const isViewer = userRole === ROLES.VIEWER
+
+  // Get assigned member name for display
+  const assignedMember = feature?.assignedTo
+    ? members.find((m) => m.id === feature.assignedTo)
+    : null
 
   useEffect(() => {
     if (!isOpen) {
@@ -94,6 +108,18 @@ export default function FeatureModal({
     }
   }
 
+  const handleAssignmentChange = async (userId: string | null) => {
+    if (!feature) return
+    
+    const result = await updateFeature(feature._id || feature.id, {
+      assignedTo: userId,
+    })
+    
+    if (result) {
+      onFeatureUpdate?.()
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -136,6 +162,47 @@ export default function FeatureModal({
             </p>
           </div>
 
+          {/* Assignment Section */}
+          {hasEditPermission && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Assignment
+              </h3>
+              <EmployeeAssignmentDropdown
+                value={feature.assignedTo || null}
+                onChange={handleAssignmentChange}
+                disabled={isUpdating}
+                projectId={projectId}
+                featureId={feature._id || feature.id}
+                taskTitle={feature.title}
+                taskDescription={feature.description}
+                taskLabels={feature.labels}
+                taskType={feature.ticketType}
+                userRole={userRole}
+                showAISuggestion={true}
+              />
+              {feature.assignedTo && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Assignment can be changed at any time by users with edit permissions.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Assignment Display (Read-only for viewers) */}
+          {isViewer && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Assigned To
+              </h3>
+              <p className="text-gray-700 dark:text-gray-300">
+                {assignedMember ? assignedMember.name : 'Unassigned'}
+              </p>
+            </div>
+          )}
+
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
@@ -146,6 +213,8 @@ export default function FeatureModal({
               onApprove={handleApprove}
               onReject={handleReject}
               canApprove={hasApprovePermission}
+              project={project}
+              features={features}
             />
           </div>
 

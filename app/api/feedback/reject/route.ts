@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
 import { createServerClient } from '@/lib/supabase'
 import { getUserFromSession, requireProposalApproval } from '@/lib/api/permissions'
-import { validateUUID, validateJsonBody, validateRequired } from '@/lib/api/validation'
+import { validateUUID, validateJsonBody, validateRequired, feedbackTypeToApi } from '@/lib/api/validation'
 import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
 import type { RejectFeedbackRequest, RejectFeedbackResponse } from '@/types/api'
 
@@ -50,14 +50,14 @@ export async function POST(request: NextRequest) {
       throw APIErrors.internalError('Failed to update feedback')
     }
 
-    // Format response
+    // Format response (convert DB format to API format)
     const formattedFeedback = {
       _id: updatedFeedback.id,
       id: updatedFeedback.id,
       projectId: updatedFeedback.project_id,
       featureId: updatedFeedback.feature_id,
       userId: updatedFeedback.user_id,
-      type: updatedFeedback.type,
+      type: feedbackTypeToApi(updatedFeedback.type), // Convert DB -> API
       content: updatedFeedback.content,
       proposedRoadmap: updatedFeedback.proposed_roadmap,
       aiAnalysis: updatedFeedback.ai_analysis,

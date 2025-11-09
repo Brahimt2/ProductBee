@@ -2,9 +2,9 @@ import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
 import { createServerClient } from '@/lib/supabase'
 import { getUserFromSession, requireProjectAccess } from '@/lib/api/permissions'
-import { validateUUID, validateJsonBody, validateRequired, validatePriority, validateTicketType, validateStoryPoints, validateLabels } from '@/lib/api/validation'
+import { validateUUID, validateJsonBody, validateRequired, validatePriority, validateTicketType, validateStoryPoints, validateLabels, priorityToDb, priorityToApi, statusToApi } from '@/lib/api/validation'
 import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
-import { HTTP_STATUS } from '@/lib/constants'
+import { HTTP_STATUS, DB_FEATURE_STATUS } from '@/lib/constants'
 import type { CreateFeatureRequest, CreateFeatureResponse } from '@/types/api'
 
 export async function POST(request: NextRequest) {
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     // Validate project access and account isolation
     await requireProjectAccess(user, body.projectId)
 
-    // Validate fields
+    // Validate fields (validates API format)
     validatePriority(body.priority)
     if (body.ticketType !== undefined) {
       validateTicketType(body.ticketType)
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create feature
+    // Create feature (convert API format to DB format)
     const { data: feature, error: featureError } = await supabase
       .from('features')
       .insert({
@@ -72,10 +72,10 @@ export async function POST(request: NextRequest) {
         account_id: user.account_id,
         title: body.title,
         description: body.description,
-        priority: body.priority,
+        priority: priorityToDb(body.priority), // Convert API -> DB
         effort_estimate_weeks: body.effortEstimateWeeks,
         depends_on: body.dependsOn || [],
-        status: 'backlog',
+        status: DB_FEATURE_STATUS.BACKLOG, // DB format using constant
         // Jira-style fields (Phase 6)
         ticket_type: body.ticketType || 'feature',
         story_points: body.storyPoints ?? null,
@@ -92,15 +92,15 @@ export async function POST(request: NextRequest) {
       throw APIErrors.internalError('Failed to create feature')
     }
 
-    // Format response
+    // Format response (convert DB format to API format)
     const formattedFeature = {
       _id: feature.id,
       id: feature.id,
       projectId: feature.project_id,
       title: feature.title,
       description: feature.description,
-      status: feature.status,
-      priority: feature.priority,
+      status: statusToApi(feature.status), // Convert DB -> API
+      priority: priorityToApi(feature.priority), // Convert DB -> API
       effortEstimateWeeks: feature.effort_estimate_weeks,
       dependsOn: feature.depends_on || [],
       createdAt: feature.created_at,

@@ -1,448 +1,930 @@
-# Frontend Summary
-
-## Overview
-This document summarizes all frontend work completed for the AI Roadmap Dashboard, including component organization, custom hooks, TypeScript types, API integration, and UI patterns.
-
-## Completed Features
-
-### 1. ✅ Component Organization
+# **1. Component Organization**
 
 **Location:** `/components/`
 
-All components reorganized into feature-based folders:
-- `/components/dashboard/` - DashboardClient, ProjectCard
-- `/components/project/` - ProjectDetailClient, FeatureCard, FeatureModal
-- `/components/feedback/` - FeedbackThread
-- `/components/modals/` - CreateProjectModal
+Feature-based structure:
 
-**Benefits:**
-- Better organization and discoverability
-- Clear separation of concerns
-- Easier to maintain and scale
-- Follows architecture guidelines
+* `/dashboard/` → DashboardClient, ProjectCard
+* `/project/` → ProjectDetailClient, FeatureCard, FeatureModal
+* `/feedback/` → FeedbackThread
+* `/modals/` → CreateProjectModal
 
-**Import Updates:**
-- All page files and component imports updated to reflect new structure
-- `app/dashboard/page.tsx` - Uses DashboardClient from organized folder
-- `app/project/[id]/page.tsx` - Uses ProjectDetailClient from organized folder
+**Benefits:** Clean separation, scalable, consistent imports.
+**Updated imports:** Dashboard page → DashboardClient, Project page → ProjectDetailClient.
 
-### 2. ✅ Custom React Hooks
+---
+
+# **2. Custom React Hooks**
 
 **Location:** `/hooks/`
 
-#### `useProject.ts`
-- `useProjects()` - Fetches all projects with real-time Supabase subscriptions
-- `useProject(projectId)` - Fetches a single project with features and feedback
-- Features: Real-time updates, loading states, error handling, type-safe
+### `useProject.ts`
 
-#### `useFeature.ts`
-- `updateFeature(featureId, updates)` - Update a feature
-- `updateFeatureStatus(featureId, status)` - Update feature status
-- `updateFeaturePriority(featureId, priority)` - Update feature priority
-- Features: Toast notifications, loading states, type-safe updates
+**`useProjects()`** - Fetch all projects with real-time updates
 
-#### `useFeedback.ts`
-- `createFeedback(feedbackData)` - Create new feedback/comment/proposal
-- `approveFeedback(feedbackId)` - Approve a proposal (PM only)
-- `rejectFeedback(feedbackId)` - Reject a proposal (PM only)
-- Features: Toast notifications, loading states, type-safe API calls
+```ts
+const { projects, isLoading, error, refetch } = useProjects()
+```
 
-**Benefits:**
-- Reusability across components
-- Separation of UI logic from data logic
-- Type safety with TypeScript
-- Centralized error handling
-- Real-time updates via Supabase subscriptions
+**Features:**
+- Fetches projects on mount
+- Sets up Supabase real-time subscription for `projects` table
+- Automatically refetches when changes occur
+- Returns loading and error states
+- Provides `refetch()` function for manual refresh
 
-### 3. ✅ TypeScript Types
+**Real-time Setup:**
+```ts
+useEffect(() => {
+  fetchProjects()
+  
+  const channel = supabase
+    .channel('projects-changes')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'projects',
+    }, () => {
+      fetchProjects() // Refresh on change
+    })
+    .subscribe()
+  
+  return () => {
+    supabase.removeChannel(channel) // Cleanup
+  }
+}, [fetchProjects])
+```
+
+**`useProject(projectId)`** - Fetch single project with features and feedback
+
+```ts
+const { projectData, isLoading, error, refetch } = useProject(projectId)
+```
+
+**Features:**
+- Fetches project, features, and feedback
+- Sets up real-time subscriptions for both `features` and `feedback` tables
+- Filters subscriptions by `project_id`
+- Automatically refetches when features or feedback change
+- Returns full project data with timeline information
+
+**Real-time Setup:**
+```ts
+const featuresChannel = supabase
+  .channel(`project-${projectId}-features`)
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'features',
+    filter: `project_id=eq.${projectId}`,
+  }, () => {
+    fetchProject()
+  })
+  .subscribe()
+```
+
+**Error Handling:**
+- Checks `response.ok` and `responseData.success`
+- Throws error with message from `responseData.error`
+- Sets error state for UI display
+
+### `useFeature.ts`
+
+**Functions:**
+- `updateFeature(featureId, updates)` - Update any feature fields
+- `updateFeatureStatus(featureId, status)` - Update status only
+- `updateFeaturePriority(featureId, priority)` - Update priority only
+- `createFeature(featureData)` - Create new feature
+
+**Pattern:**
+```ts
+const { updateFeature, isUpdating, isCreating } = useFeature()
+
+const handleUpdate = async () => {
+  const result = await updateFeature(featureId, {
+    status: 'in_progress',
+    priority: 'high'
+  })
+  // result is FeatureResponse | null
+  // Toast notifications handled automatically
+}
+```
+
+**Error Handling:**
+- Checks for 403 (permission errors) and shows user-friendly message
+- Checks for 404 (not found) and shows appropriate error
+- All errors shown via toast notifications
+- Returns `null` on error, `FeatureResponse` on success
+
+**Toast Notifications:**
+- Success: "Feature updated successfully"
+- Permission error: "You do not have permission to update this feature. Viewers have read-only access."
+- Not found: "Feature not found or you do not have access to it."
+
+### `useFeedback.ts`
+
+**Functions:**
+- `createFeedback(feedbackData)` - Create comment or proposal
+- `approveFeedback(feedbackId)` - Approve proposal (PM/Admin only)
+- `rejectFeedback(feedbackId)` - Reject proposal (PM/Admin only)
+
+**Pattern:**
+```ts
+const { createFeedback, approveFeedback, isSubmitting, isApproving } = useFeedback()
+
+const handleSubmit = async () => {
+  const result = await createFeedback({
+    projectId,
+    featureId,
+    type: 'comment',
+    content: 'Feedback text'
+  })
+}
+```
+
+**Error Handling:**
+- Permission errors (403) show role-specific messages
+- "Only PMs and Admins can approve proposals..."
+- Toast notifications for all operations
+- Returns `null` on error, `FeedbackResponse` on success
+
+**States:**
+- `isSubmitting` - Creating feedback
+- `isApproving` - Approving proposal
+- `isRejecting` - Rejecting proposal
+
+### `useUserProfile.ts`
+
+**Functions:**
+- `fetchProfile()` - Fetch current user's profile
+- `updateProfile(updates)` - Update profile (role, specialization, vacation dates)
+
+**Pattern:**
+```ts
+const { profile, loading, fetchProfile, updateProfile } = useUserProfile()
+
+useEffect(() => {
+  fetchProfile()
+}, [])
+
+const handleUpdate = async () => {
+  await updateProfile({
+    role: 'engineer',
+    specialization: 'Backend',
+    vacationDates: [{ start: '2024-12-20', end: '2024-12-31' }]
+  })
+}
+```
+
+**Features:**
+- Manages profile state internally
+- Shows toast notifications
+- Handles errors gracefully
+
+### `useTeamMembers.ts`
+
+**Function:**
+- `fetchTeamMembers()` - Fetch all team members in account
+
+**Pattern:**
+```ts
+const { members, loading, error, refetch } = useTeamMembers()
+// Automatically fetches on mount
+```
+
+**Features:**
+- Fetches on mount
+- Returns loading and error states
+- Provides `refetch()` for manual refresh
+- Shows toast on error
+
+**Benefits:** Centralized logic, reusable, consistent error/UI flow, real-time support.
+
+---
+
+# **3. TypeScript Types**
 
 **Location:** `/types/`
 
-#### Type Structure
-- `index.ts` - Central export for all types
-- `database.ts` - Database model types (BaseModel, User, Project, Feature, Feedback)
-- `api.ts` - API request/response types (APIResponse<T>, GetProjectsResponse, etc.)
-- `feedback.ts` - Feedback-specific types (FeedbackAnalysis, ProposalAnalysis)
-- `roadmap.ts` - Roadmap-specific types (RoadmapFeature, RoadmapResponse)
+### Structure
 
-#### Frontend-Compatible Response Types
-- `ProjectResponse` - Project API response (includes both `_id` and `id` for compatibility)
-- `FeatureResponse` - Feature API response
-- `FeedbackResponse` - Feedback API response
+* `index.ts` — unified exports
+* `database.ts` — BaseModel, User, Project, Feature, Feedback
+* `api.ts` — all request/response types
+* `feedback.ts` — analysis + feedback models
+* `roadmap.ts` — roadmap feature structures
 
-**Benefits:**
-- Type safety at compile time
-- Better IntelliSense and autocomplete
-- Types serve as documentation
-- Safer refactoring
-- Consistent data structures
+### Response Types
 
-### 4. ✅ API Response Wrapper Fix
+* `ProjectResponse`, `FeatureResponse`, `FeedbackResponse`
+* Includes `_id` + `id` compatibility.
 
-**Problem:** Backend API routes use `successResponse()` which wraps all responses in `{ success: true, data: {...} }`, but frontend was accessing data directly, causing failures throughout the application.
+**Benefits:** Strong type safety, clean refactoring, ideal DX.
 
-**Solution:** Updated all frontend API calls to:
-1. Parse response JSON
-2. Check for `responseData.success`
-3. Access data from `responseData.data`
-4. Handle errors consistently
+---
 
-**Files Modified:**
-- `components/modals/CreateProjectModal.tsx` - Fixed project creation and redirect
-- `hooks/useProject.ts` - Fixed projects and project detail fetching
-- `hooks/useFeature.ts` - Fixed feature updates
-- `hooks/useFeedback.ts` - Fixed feedback operations
-- `components/dashboard/DashboardClient.tsx` - Fixed real-time updates
-- `components/feedback/FeedbackThread.tsx` - Fixed feedback display
+# **4. API Response Wrapper Fix**
 
-**API Response Structure:**
-```typescript
-// Success
-{
-  success: true,
-  data: { ...actualData... }
+## Standard API Response Handling Pattern
+
+Backend wraps everything with:
+
+```ts
+{ success: boolean, data?: T, error?: string, code?: string }
+```
+
+### Standard Pattern in Hooks
+
+```ts
+const response = await fetch('/api/endpoint')
+const responseData = await response.json()
+
+if (!response.ok || !responseData.success) {
+  throw new Error(responseData.error || 'Request failed')
 }
 
-// Error
-{
-  success: false,
-  error: "Error message",
-  code?: "ERROR_CODE"
+const data = responseData.data // Unwrap the data
+```
+
+### Complete Example
+
+```ts
+async function fetchData() {
+  try {
+    setIsLoading(true)
+    setError(null)
+    
+    const response = await fetch('/api/endpoint')
+    const responseData = await response.json()
+    
+    // Check HTTP status and success flag
+    if (!response.ok || !responseData.success) {
+      // Handle specific error codes
+      if (response.status === 403) {
+        throw new Error('Permission denied')
+      }
+      if (response.status === 404) {
+        throw new Error('Resource not found')
+      }
+      throw new Error(responseData.error || 'Request failed')
+    }
+    
+    // Unwrap data
+    const data = responseData.data
+    setData(data)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'An error occurred'
+    setError(message)
+    toast.error(message)
+  } finally {
+    setIsLoading(false)
+  }
 }
 ```
 
-**Affected Endpoints:**
-- POST /api/roadmap/generate - Project creation
-- GET /api/projects - List all projects
-- GET /api/project/[id] - Get project details
-- PATCH /api/feature/[id] - Update feature
-- POST /api/feedback/create - Create feedback
-- POST /api/feedback/approve - Approve feedback
-- POST /api/feedback/reject - Reject feedback
+### Error Code Handling
 
-### 5. ✅ Server/Client Component Patterns
-
-**Server Components** (`app/**/page.tsx`)
-- Fetch data directly from Supabase
-- Handle authentication and session management
-- Pass data to client components as props
-
-**Client Components**
-- Handle interactivity and UI updates
-- Use custom hooks for data operations
-- Manage local state and user interactions
-- Real-time subscriptions via Supabase
-
-**Separation of Concerns:**
-- Server components: Data fetching, authentication
-- Client components: UI interactions, state management
-- Hooks: Data operations, API calls
-
-### 6. ✅ Constants Integration
-
-**Status:** Ready for integration
-
-**Location:** `/lib/constants.ts` (shared with backend)
-
-Constants are available from backend and can be imported in frontend components:
-- `ROLES` - User roles
-- `FEATURE_STATUS` - Feature statuses (API-level)
-- `DB_FEATURE_STATUS` - Database feature statuses
-- `PRIORITY_LEVELS` - Priority levels (API-level)
-- `DB_PRIORITY_LEVELS` - Database priority levels
-- `FEEDBACK_STATUS` - Feedback statuses
-- `FEEDBACK_TYPE` - Feedback types (API-level)
-- `DB_FEEDBACK_TYPE` - Database feedback types
-- `RISK_LEVELS` - Risk levels
-
-**Note:** Frontend currently uses direct string values in some places. Migration to constants is recommended for consistency.
-
-**Files That Can Use Constants:**
-- `components/dashboard/ProjectCard.tsx` - Risk level colors
-- `components/project/FeatureCard.tsx` - Priority colors
-- `components/project/FeatureModal.tsx` - Priority colors, status checks
-- `components/project/ProjectDetailClient.tsx` - Status columns, risk levels
-- `components/feedback/FeedbackThread.tsx` - Status checks
-- `hooks/useFeature.ts` - Status and priority types
-- `hooks/useFeedback.ts` - Feedback types and statuses
-
-### 7. ✅ Real-time Features
-
-**Implementation:** Supabase Realtime subscriptions
-
-**Features:**
-- Projects list updates when new projects are created
-- Kanban board updates when feature status changes
-- Feedback appears instantly when added
-- All changes synchronized across all connected users
-
-**Usage:**
-- `useProjects()` hook includes real-time subscription
-- Automatic data refresh on database changes
-- No manual refresh needed
-
-## Architecture Compliance
-
-### ✅ Followed Patterns
-1. Server components fetch data from Supabase
-2. Client components handle hooks and interactivity
-3. Components organized by feature
-4. Custom hooks for data operations
-5. TypeScript types from `/types`
-6. Responsive Tailwind CSS styling
-7. API response wrapper handling
-8. Real-time updates via Supabase
-
-### ⚠️ Areas for Improvement
-1. **Constants Usage** - Some components still use direct string values instead of constants
-2. **Error Handling** - Could be more consistent across all components
-3. **Loading States** - Some components could benefit from better loading indicators
-
-## File Structure
-
-```
-/components
-  /dashboard
-    - DashboardClient.tsx
-    - ProjectCard.tsx
-  /project
-    - ProjectDetailClient.tsx
-    - FeatureCard.tsx
-    - FeatureModal.tsx
-  /feedback
-    - FeedbackThread.tsx
-  /modals
-    - CreateProjectModal.tsx
-
-/hooks
-  - useProject.ts
-  - useFeature.ts
-  - useFeedback.ts
-
-/types
-  - index.ts (exports all types)
-  - api.ts (API types)
-  - database.ts (Database types)
-  - feedback.ts (Feedback types)
-  - roadmap.ts (Roadmap types)
-
-/app
-  /dashboard
-    - page.tsx (server component)
-  /project/[id]
-    - page.tsx (server component)
-  - layout.tsx
-  - page.tsx
-  - globals.css
+```ts
+if (responseData.code === 'FORBIDDEN') {
+  // Handle permission error
+} else if (responseData.code === 'NOT_FOUND') {
+  // Handle not found
+} else if (responseData.code === 'BAD_REQUEST') {
+  // Handle validation error
+}
 ```
 
-## Testing Recommendations
+**Files updated:**
+CreateProjectModal, useProject, useFeature, useFeedback, DashboardClient, FeedbackThread, useUserProfile, useTeamMembers.
 
-1. **Component Rendering** - Verify all components render correctly
-2. **Real-time Updates** - Test Supabase real-time subscriptions
-3. **API Integration** - Verify all API calls work correctly
-4. **Type Safety** - Ensure no TypeScript errors
-5. **Responsive Design** - Test on different screen sizes
-6. **Error Handling** - Test error scenarios and user feedback
-7. **Loading States** - Verify loading indicators work correctly
+**Endpoints fixed:**
+`/api/roadmap/generate`, `/api/projects`, `/api/project/[id]`, `/api/feature/[id]`, `/api/feedback/*`, `/api/user/profile`, `/api/team/members`
 
-## Known Issues
+---
 
-1. **Type Inconsistency** - Frontend uses `'proposal'` to match database schema, while types define `'timeline_proposal'`. This requires backend coordination to align types.
-2. **Constants Migration** - Some components still use magic strings instead of constants from `/lib/constants.ts`.
+# **5. Server/Client Component Patterns**
 
-## Next Steps
+### **Server components**
 
-1. Migrate components to use constants from `/lib/constants.ts`
-2. Improve error handling consistency across all components
-3. Add better loading states and skeletons
-4. Enhance accessibility (ARIA labels, keyboard navigation)
-5. Add unit tests for hooks and components
-6. Add integration tests for API interactions
+* Fetch data (Supabase)
+* Handle session + permissions
+* Pass props to client components
 
-## Phase 4: Account Isolation & Permission Enforcement
+### **Client components**
 
-### ✅ Completed Features
+* Interactivity
+* Hooks for mutations
+* Local state
+* Real-time updates
 
-#### 1. Server Component Updates
-- **Updated `/app/dashboard/page.tsx`**:
-  - Now uses `getUserFromSession()` from permissions utility for proper account isolation
-  - Filters projects by `account_id` to enforce account isolation
-  - Passes user role to `DashboardClient` component
+**Clear separation:** Server = fetching/auth; Client = UI & logic; Hooks = operations.
+
+---
+
+# **6. Constants Integration**
+
+## Using Constants in Components
+
+**Location:** `/lib/constants.ts`
+
+**Available Constants:**
+- `ROLES` - User roles (ADMIN, PM, ENGINEER, VIEWER)
+- `FEATURE_STATUS` - Feature status (NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETE)
+- `PRIORITY_LEVELS` - Priority levels (CRITICAL, HIGH, MEDIUM, LOW)
+- `FEEDBACK_STATUS` - Feedback status (PENDING, APPROVED, REJECTED, DISCUSSION)
+- `FEEDBACK_TYPE` - Feedback types (COMMENT, TIMELINE_PROPOSAL)
+- `SPECIALIZATIONS` - Engineer specializations (BACKEND, FRONTEND, QA, DEVOPS)
+- `RISK_LEVELS` - Risk levels (LOW, MEDIUM, HIGH)
+- `TICKET_TYPES` - Ticket types (FEATURE, BUG, EPIC, STORY)
+
+### Usage Pattern
+
+```ts
+import { ROLES, FEATURE_STATUS, PRIORITY_LEVELS } from '@/lib/constants'
+
+// Check role
+if (user.role === ROLES.PM || user.role === ROLES.ADMIN) {
+  // Show edit button
+}
+
+// Check status
+if (feature.status === FEATURE_STATUS.IN_PROGRESS) {
+  // Show in-progress badge
+}
+
+// Priority comparison
+if (feature.priority === PRIORITY_LEVELS.CRITICAL) {
+  // Show critical indicator
+}
+```
+
+### Display Values
+
+```ts
+// Get display label
+const statusLabel = {
+  [FEATURE_STATUS.NOT_STARTED]: 'Not Started',
+  [FEATURE_STATUS.IN_PROGRESS]: 'In Progress',
+  [FEATURE_STATUS.BLOCKED]: 'Blocked',
+  [FEATURE_STATUS.COMPLETE]: 'Complete',
+}[feature.status]
+```
+
+### Dropdown Options
+
+```ts
+const priorityOptions = Object.values(PRIORITY_LEVELS).map(priority => ({
+  value: priority,
+  label: priority.charAt(0).toUpperCase() + priority.slice(1)
+}))
+```
+
+**Can be used in:** ProjectCard, FeatureCard, FeatureModal, ProjectDetailClient, FeedbackThread, useFeature, useFeedback, OnboardingForm, TeamMembersList.
+
+**Note:** Some components still use magic strings → planned migration. Always prefer constants over string literals.
+
+---
+
+# **7. Real-time Features**
+
+## Real-time Subscription Patterns
+
+**Supabase Realtime:**
+- Projects auto-update
+- Kanban features auto-move
+- Feedback live updates
+- Multi-user sync
+
+### Standard Subscription Pattern
+
+```ts
+useEffect(() => {
+  // Fetch initial data
+  fetchData()
   
-- **Updated `/app/project/[id]/page.tsx`**:
-  - Uses `getUserFromSession()` and `canViewProject()` for permission checks
-  - Filters projects, features, and feedback by `account_id`
-  - Shows access denied message if user cannot view project
-  - Passes user role to `ProjectDetailClient` component
-
-#### 2. Role-Based UI Rendering
-- **DashboardClient**:
-  - Hide "Create Project" button for non-PM/non-Admin users
-  - Uses `ROLES` constants from `/lib/constants.ts`
-  - Shows appropriate messaging based on user role
+  // Set up subscription
+  const channel = supabase
+    .channel('unique-channel-name')
+    .on('postgres_changes', {
+      event: '*', // INSERT, UPDATE, DELETE
+      schema: 'public',
+      table: 'table_name',
+      filter: 'column=eq.value' // Optional: filter by specific value
+    }, (payload) => {
+      // Handle change
+      console.log('Change:', payload)
+      fetchData() // Refresh data
+    })
+    .subscribe()
   
-- **ProjectDetailClient**:
-  - Implements permission checks using `ROLES` constants
-  - Determines `canEdit` and `canApprove` permissions
-  - Prevents viewers from updating features
-  - Passes permissions to child components
+  // Cleanup subscription
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}, [dependencies])
+```
+
+### Filtered Subscriptions
+
+**Filter by project:**
+```ts
+.filter(`project_id=eq.${projectId}`)
+```
+
+**Filter by account (if needed):**
+```ts
+.filter(`account_id=eq.${accountId}`)
+```
+
+### Multiple Subscriptions
+
+```ts
+useEffect(() => {
+  const channel1 = supabase.channel('channel-1')...
+  const channel2 = supabase.channel('channel-2')...
   
-- **FeatureModal**:
-  - Uses `ROLES` constants for role checking
-  - Hides feedback submission forms for viewers
-  - Shows helpful message for viewers explaining read-only access
-  - Only shows approve/reject buttons to PMs and Admins
+  return () => {
+    supabase.removeChannel(channel1)
+    supabase.removeChannel(channel2)
+  }
+}, [])
+```
+
+### Error Handling
+
+```ts
+channel
+  .on('postgres_changes', {...}, callback)
+  .subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      console.log('Subscribed')
+    } else if (status === 'CHANNEL_ERROR') {
+      console.error('Subscription error')
+    }
+  })
+```
+
+**Important:** Always clean up subscriptions in `useEffect` return function to prevent memory leaks.
+
+Implemented inside `useProjects()` and `useProject()` hooks.
+
+---
+
+# **8. Architecture Compliance**
+
+✅ Feature-based components
+✅ Server fetch → client UI separation
+✅ TypeScript everywhere
+✅ Realtime syncing
+✅ Correct API wrapper handling
+⚠️ Improve constants usage
+⚠️ Improve loading & error UI
+
+---
+
+# **9. Phase 4 — Account Isolation & Permissions**
+
+### **Server Pages Updated**
+
+* `/app/dashboard/page.tsx`
+
+  * Uses `getUserFromSession()`
+  * Filters by `account_id`
+  * Passes role to DashboardClient
+* `/app/project/[id]/page.tsx`
+
+  * Uses `canViewProject()`
+  * Account filtering
+  * Passes role to client component
+
+### **Role-Based UI**
+
+DashboardClient:
+
+* Create Project only for PM/Admin
+
+ProjectDetailClient:
+
+* Computes `canEdit`, `canApprove`
+* Viewers = read-only
+
+FeatureModal:
+
+* Viewer restrictions
+* Approve/Reject → PM/Admin only
+
+FeatureCard:
+
+* Accepts permission props
+
+### **Permission-Aware Hooks**
+
+useFeature & useFeedback handle 403 errors with helpful toasts.
+
+### **Constants**
+
+All role checks now use `ROLES` enum.
+
+### **Viewer UX**
+
+Read-only UI + explanations.
+
+---
+
+# **10. Phase 5 — User Roles & Team Management**
+
+### **Hooks**
+
+`useUserProfile.ts`
+
+* `fetchProfile()`
+* `updateProfile()`
+* Includes workload + vacation fields
+
+`useTeamMembers.ts`
+
+* Fetch all members in account
+
+### **Onboarding Flow**
+
+`/app/onboarding/page.tsx` — server
+`OnboardingForm.tsx` — client
+
+* Role selection: PM / Engineer / Viewer
+* Engineers must pick specialization
+* Redirect logic:
+
+  * Viewers → onboarding
+  * Engineers w/o specialization → onboarding
+* Always accessible for updates
+
+### **Team Members**
+
+`TeamMembersList.tsx`
+
+* Role badges
+* Specialization badges
+* Workload metrics
+* Vacation indicators
+* Responsive, modern UI
+
+`/app/team/page.tsx` — server component
+
+### **Integration**
+
+* GET/PATCH `/api/user/profile`
+* GET `/api/team/members`
+* Uses ROLES + SPECIALIZATIONS constants
+* Type-safe API calls
+
+### **UI/UX**
+
+* Clean onboarding
+* Error/validation states
+* Badges, cards, responsive grid
+* Dark mode friendly
+
+**Status:** ✅ Phase 5 fully completed.
+
+---
+
+# **Testing Recommendations**
+
+* Component rendering
+* Realtime updates
+* API integration
+* Types compile cleanly
+* Mobile responsiveness
+* Error flows
+* Loading states
+
+---
+
+# **Known Issues**
+
+1. `'proposal'` vs `'timeline_proposal'` type mismatch
+2. Some places still use string literals instead of constants
+
+---
+
+# **11. Permission-Based UI Patterns**
+
+## Showing/Hiding UI Based on Role
+
+```ts
+import { ROLES } from '@/lib/constants'
+
+// Simple check
+{user.role === ROLES.PM && <CreateProjectButton />}
+
+// Multiple roles
+{(user.role === ROLES.PM || user.role === ROLES.ADMIN) && <EditButton />}
+
+// Helper function
+const canEdit = user.role === ROLES.PM || user.role === ROLES.ADMIN
+{canEdit && <EditButton />}
+```
+
+## Disabling Actions
+
+```ts
+<button 
+  disabled={user.role === ROLES.VIEWER}
+  onClick={handleUpdate}
+>
+  Update Feature
+</button>
+```
+
+## Conditional Rendering
+
+```ts
+{user.role === ROLES.VIEWER ? (
+  <ReadOnlyView />
+) : (
+  <EditableView />
+)}
+```
+
+## Permission Props Pattern
+
+```ts
+interface FeatureCardProps {
+  feature: FeatureResponse
+  canEdit: boolean
+  canApprove: boolean
+}
+
+function FeatureCard({ feature, canEdit, canApprove }: FeatureCardProps) {
+  return (
+    <div>
+      {canEdit && <EditButton />}
+      {canApprove && <ApproveButton />}
+    </div>
+  )
+}
+```
+
+# **12. Loading States**
+
+## Loading Patterns
+
+```ts
+// In hook
+const { data, isLoading, error } = useProject(projectId)
+
+// In component
+{isLoading ? (
+  <LoadingSkeleton />
+) : error ? (
+  <ErrorMessage error={error} />
+) : (
+  <ProjectContent data={data} />
+)}
+```
+
+## Skeleton Loaders
+
+```ts
+function LoadingSkeleton() {
+  return (
+    <div className="animate-pulse">
+      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+    </div>
+  )
+}
+```
+
+## Button Loading States
+
+```ts
+<button disabled={isUpdating}>
+  {isUpdating ? 'Updating...' : 'Update'}
+</button>
+```
+
+# **13. Error Boundaries**
+
+## Error Handling in Components
+
+```ts
+try {
+  await updateFeature(featureId, updates)
+} catch (error) {
+  // Error already handled in hook with toast
+  // Component can show additional UI if needed
+  setLocalError(error.message)
+}
+```
+
+## Error Display
+
+```ts
+{error && (
+  <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded">
+    {error}
+  </div>
+)}
+```
+
+# **14. Component Hierarchy & Data Flow**
+
+## Server → Client → Hooks Flow
+
+```
+Server Component (page.tsx)
+  ↓ (fetches data, passes props)
+Client Component (ComponentClient.tsx)
+  ↓ (uses hooks for mutations)
+Custom Hooks (useFeature, useFeedback)
+  ↓ (calls API)
+API Routes
+```
+
+## Example Flow
+
+```ts
+// Server Component
+export default async function ProjectPage({ params }: { params: { id: string } }) {
+  const session = await getSession()
+  const user = await getUserFromSession(session)
+  const project = await getProject(params.id)
   
-- **FeatureCard**:
-  - Accepts `canEdit` and `onStatusChange` props for future use
-  - Prepared for drag-and-drop or status change functionality
+  return <ProjectDetailClient project={project} user={user} />
+}
 
-#### 3. Permission-Aware API Calls
-- **useFeature Hook**:
-  - Added permission error handling (403 status)
-  - Shows helpful error messages for access denied scenarios
-  - Distinguishes between permission errors and other errors
-  
-- **useFeedback Hook**:
-  - Added permission checks for approve/reject operations
-  - Shows specific error messages for PM-only actions
-  - Handles 403 errors with user-friendly messages
-  
-- **CreateProjectModal**:
-  - Added permission error handling
-  - Shows helpful message if user lacks permission to create projects
+// Client Component
+'use client'
+export function ProjectDetailClient({ project, user }) {
+  const { updateFeature } = useFeature()
+  // Use hooks for mutations
+}
+```
 
-#### 4. Constants Integration
-- All components now use `ROLES` constants from `/lib/constants.ts`
-- Consistent role checking across all components
-- Type-safe role comparisons
+# **Common Mistakes**
 
-#### 5. Error Messages
-- Permission errors show helpful, actionable messages
-- Users are informed what role is required for actions
-- Clear distinction between permission errors and other errors
-- Error messages guide users to contact PMs/Admins when needed
+1. **Forgetting to unwrap API response** - Always check `responseData.success` and use `responseData.data`
+2. **Not cleaning up subscriptions** - Always return cleanup function in `useEffect`
+3. **Using magic strings instead of constants** - Always use constants from `/lib/constants.ts`
+4. **Not handling loading states** - Always show loading indicators during async operations
+5. **Not handling errors** - Always catch errors and show user-friendly messages
+6. **Missing permission checks** - Always check user role before showing actions
+7. **Not using type-safe hooks** - Always use typed hooks instead of direct fetch calls
+8. **Forgetting to handle 403 errors** - Always show permission-specific error messages
 
-### Key Changes
+# **12. Phase 11 — AI-Powered Chatbot for Ticket Generation**
 
-1. **Account Isolation**: All data queries now filter by `account_id` to ensure users only see data from their account
-2. **Role-Based Rendering**: UI elements are conditionally rendered based on user role
-3. **Permission Guards**: API calls include permission checks and helpful error handling
-4. **Constants Usage**: All role checks use constants from `/lib/constants.ts` for consistency
-5. **Viewer Read-Only**: Viewers see read-only UI with helpful messaging
+## **Components Created**
 
-### Files Modified
+### **ChatInterface** (`/components/project/ChatInterface.tsx`)
 
-- `app/dashboard/page.tsx` - Added account isolation and user role passing
-- `app/project/[id]/page.tsx` - Added permission checks and account isolation
-- `components/dashboard/DashboardClient.tsx` - Added role-based UI rendering
-- `components/project/ProjectDetailClient.tsx` - Added permission checks and role-based rendering
-- `components/project/FeatureModal.tsx` - Added role-based UI and viewer read-only mode
-- `components/project/FeatureCard.tsx` - Added permission props for future use
-- `components/modals/CreateProjectModal.tsx` - Added permission error handling
-- `hooks/useFeature.ts` - Added permission-aware error handling
-- `hooks/useFeedback.ts` - Added permission-aware error handling for approve/reject
+Persistent chat panel for AI-powered ticket generation:
 
-## Status
-✅ **Phase 4: Account Isolation & Permission Enforcement - Completed**
+* **Features:**
+  - Collapsible bottom-right drawer (minimizable)
+  - Message history display with user/assistant messages
+  - Input field with "Generate Tickets" button
+  - Auto-scroll to latest message
+  - Loading indicator while generating
+  - Dark mode support
 
-All Phase 4 frontend tasks are complete. The application now properly enforces account isolation, displays role-based UI, and provides helpful permission error messages. Components use constants for consistency, and viewers have read-only access with clear messaging.
+* **Props:**
+  - `projectId: string` - Project ID for chat context
+  - `isOpen: boolean` - Controls chat visibility
+  - `onClose: () => void` - Close handler
+  - `onTicketsGenerated?: (ticketCount: number) => void` - Callback when tickets are generated
 
-## Phase 5: User Roles & Team Management
+* **UI:**
+  - Fixed position bottom-right drawer
+  - Minimizable (collapses to header only)
+  - Message bubbles with timestamps
+  - Bot and user avatars
+  - Responsive design
 
-### ✅ Completed Features
+### **TicketGenerationControls** (`/components/project/TicketGenerationControls.tsx`)
 
-#### 1. User Profile Hooks
-- **Created `/hooks/useUserProfile.ts`**:
-  - `fetchProfile()` - Fetches current user's profile with workload metrics
-  - `updateProfile(updates)` - Updates user's role, specialization, and vacation dates
-  - Features: Loading states, error handling, toast notifications, type-safe API calls
+Controls for managing AI-generated ticket suggestions:
 
-#### 2. Team Members Hooks
-- **Created `/hooks/useTeamMembers.ts`**:
-  - `fetchTeamMembers()` - Fetches all team members in the current account
-  - Features: Automatic fetch on mount, loading states, error handling, real-time ready
+* **Features:**
+  - Generation mode selector: "Generate All" / "One at a Time" / "None"
+  - Ticket selection with checkboxes
+  - Ticket preview with priority, effort, labels, confidence scores
+  - Bulk apply selected tickets
+  - Skeleton loaders during generation
+  - Staggered fade-in animations for tickets
 
-#### 3. Onboarding Flow
-- **Created `/app/onboarding/page.tsx`**:
-  - Server component that checks if user needs onboarding
-  - Redirects users who already have proper role and specialization
-  - Allows users to update their profile even after onboarding
+* **Props:**
+  - `projectId: string` - Project ID
+  - `onTicketsApplied?: (ticketIds: string[]) => void` - Callback when tickets are applied
 
-- **Created `/components/onboarding/OnboardingForm.tsx`**:
-  - Client component with role selection (PM, Engineer, Viewer)
-  - Specialization dropdown for Engineers (Backend, Frontend, QA, DevOps)
-  - Form validation ensures engineers select a specialization
-  - Redirects to dashboard after successful profile update
-  - Beautiful, responsive UI with role cards and clear instructions
+* **UI:**
+  - Mode selector buttons
+  - Scrollable ticket list (max height)
+  - Priority badges with color coding
+  - Confidence score display
+  - Apply/Dismiss actions
 
-#### 4. Onboarding Redirect Logic
-- **Updated `/app/dashboard/page.tsx`**:
-  - Added redirect logic to check if user needs onboarding
-  - Redirects users with default 'viewer' role to onboarding
-  - Redirects engineers without specialization to onboarding
-  - Ensures all users have proper role and specialization set before accessing dashboard
+## **Hooks Created**
 
-#### 5. Team Members List
-- **Created `/components/team/TeamMembersList.tsx`**:
-  - Displays all team members in the current account
-  - Shows role badges with color coding (Admin, PM, Engineer, Viewer)
-  - Shows specialization badges for engineers
-  - Displays workload metrics (ticket count, story point count)
-  - Shows vacation status with indicator
-  - Beautiful, responsive card layout with hover effects
-  - Loading states and error handling
+### **useChat** (`/hooks/useChat.ts`)
 
-- **Created `/app/team/page.tsx`**:
-  - Server component that displays team members list
-  - Ensures user authentication and account isolation
-  - Provides clean page layout for team management
+Hook for managing AI chat functionality:
 
-### Key Features
+* **Functions:**
+  - `generateTickets(message: string): Promise<ChatResponse | null>` - Generate tickets via chat
+  - `applyTickets(tickets: SuggestedTicket[]): Promise<string[] | null>` - Bulk create tickets
+  - `loadChatHistory(): ChatMessage[]` - Load history from localStorage
+  - `saveChatHistory(history: ChatMessage[]): void` - Save history to localStorage
+  - `clearChatHistory(): void` - Clear history
 
-1. **Role Selection**: Users can select between PM, Engineer, or Viewer roles during onboarding
-2. **Specialization**: Engineers must select a specialization (Backend, Frontend, QA, DevOps)
-3. **Onboarding Redirect**: Users with default 'viewer' role or engineers without specialization are redirected to onboarding
-4. **Profile Updates**: Users can update their role and specialization at any time through the onboarding page
-5. **Team Visibility**: All team members in the account can be viewed with their roles, specializations, and workload metrics
-6. **Workload Metrics**: Displays current ticket count and story point count for each team member (returns 0 until Phase 6)
-7. **Vacation Status**: Shows if team members are on vacation
+* **State:**
+  - `isGenerating: boolean` - Generation in progress
+  - `isApplying: boolean` - Applying tickets in progress
+  - `conversationHistory: ChatMessage[]` - Chat message history
+  - `suggestedTickets: SuggestedTicket[]` - AI-suggested tickets
 
-### Files Created
+* **localStorage Management:**
+  - Key: `chat-history-${projectId}`
+  - Max 50 messages (prunes oldest)
+  - Automatic save/load on mount
 
-- `hooks/useUserProfile.ts` - User profile management hook
-- `hooks/useTeamMembers.ts` - Team members fetching hook
-- `app/onboarding/page.tsx` - Onboarding page (server component)
-- `components/onboarding/OnboardingForm.tsx` - Onboarding form (client component)
-- `app/team/page.tsx` - Team page (server component)
-- `components/team/TeamMembersList.tsx` - Team members list (client component)
+## **Integration**
 
-### Files Modified
+### **ProjectDetailClient Updates**
 
-- `app/dashboard/page.tsx` - Added onboarding redirect logic
+* Added "Modify with AI" button in roadmap summary section (PM/Admin only)
+* Added "AI Chat" button in features header (PM/Admin only)
+* Integrated `TicketGenerationControls` component (shows above features list)
+* Integrated `ChatInterface` component (bottom-right drawer)
+* Auto-refresh project data when tickets are applied
 
-### Integration Points
+### **Styling**
 
-- Uses `GET /api/user/profile` and `PATCH /api/user/profile` for profile management
-- Uses `GET /api/team/members` for fetching team members
-- Integrates with constants from `/lib/constants.ts` (ROLES, SPECIALIZATIONS)
-- Uses types from `/types/api.ts` for type safety
-- Follows server/client component patterns
-- Implements proper error handling and loading states
+* Added fade-in animation to `globals.css`:
+  - `@keyframes fade-in` - Smooth fade-in with slight upward motion
+  - `.animate-fade-in` - Utility class for animations
 
-### UI/UX Features
+## **Features Implemented**
 
-- Clean, modern onboarding interface with role selection cards
-- Clear instructions and helpful messaging
-- Form validation with error messages
-- Loading states and disabled buttons during submission
-- Beautiful team members list with color-coded badges
-- Responsive design for mobile and desktop
-- Dark mode support
+✅ **Chat Interface:**
+- Persistent chat panel (collapsible sidebar/drawer)
+- Message history display
+- Input field with "Generate Tickets" button
+- Auto-scroll to latest message
+- Loading indicators
 
-## Status
-✅ **Phase 5: User Roles & Team Management - Completed**
+✅ **Ticket Generation Controls:**
+- Mode selector: "Generate All" / "One at a Time" / "None"
+- Ticket selection UI
+- Pending tickets queue display
+- Bulk apply functionality
 
-All Phase 5 frontend tasks are complete. Users can now set their role and specialization through onboarding, and team members can be viewed with their roles, specializations, and workload metrics. The onboarding flow ensures all users have proper roles set before accessing the dashboard.
+✅ **Lazy Loading:**
+- Skeleton loaders when generation starts
+- Staggered fade-in animations (150ms delay between tickets)
+- Smooth transitions
+- Consistent timing from first ticket
 
+✅ **localStorage Management:**
+- Chat history persistence (`chat-history-${projectId}`)
+- Max 50 messages (auto-prune oldest)
+- Automatic load on component mount
+- Clear on project deletion (manual)
+
+✅ **UI Integration:**
+- "Modify with AI" button on project page
+- "AI Chat" button in features header
+- Permission-based visibility (PM/Admin only)
+- Real-time project refresh after ticket creation
+
+## **Patterns Used**
+
+* **Hook Pattern:** `useChat` follows same pattern as `useFeature`, `useFeedback`
+* **Component Organization:** Feature-based structure in `/components/project/`
+* **State Management:** React hooks with localStorage persistence
+* **Animation:** CSS keyframes with Tailwind utilities
+* **Error Handling:** Toast notifications via `react-hot-toast`
+* **Type Safety:** Full TypeScript types from `/types/chat.ts`
+
+## **Testing Recommendations**
+
+* Test chat UI interactions (send message, view history)
+* Test localStorage persistence (refresh page, verify history)
+* Test ticket generation UI (mode selection, ticket preview)
+* Test lazy loading animations (skeleton → fade-in)
+* Test chat history management (pruning, clearing)
+* Test on mobile devices (responsive drawer)
+* Test permission enforcement (Viewer cannot access)
+
+---
+
+# **Next Steps**
+
+* Full constants migration
+* Better loading skeletons
+* Accessibility improvements
+* Hook/component unit tests
+* Integration tests
+* More consistent error boundaries
+* Error boundary components for React error boundaries
