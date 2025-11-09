@@ -162,7 +162,7 @@ Enable PMs to have an ongoing conversation with AI to generate, modify, and refi
 
 ## **Phase 12: Drag-and-Drop with Two-Way Confirmation**
 
-**Status:** Not Started  
+**Status:** Backend Complete ✅  
 **Dependencies:** Phase 6 (Jira-Style Tickets), Phase 10 (Feedback System)  
 **Estimated Complexity:** Medium
 
@@ -184,28 +184,28 @@ Allow PMs and Engineers to drag tickets between status columns with mutual appro
 
 ### **BACKEND**
 
-- [ ] Create PendingChange model:
-  - [ ] `featureId`
-  - [ ] `proposedBy` (userId)
-  - [ ] `fromStatus`
-  - [ ] `toStatus`
-  - [ ] `status` (pending/approved/rejected)
-  - [ ] `createdAt`
-- [ ] Create `POST /api/feature/[id]/propose-status-change`:
-  - [ ] Accept: newStatus
-  - [ ] Create PendingChange record
-  - [ ] Return: pendingChangeId
-- [ ] Create `POST /api/feature/[id]/approve-status-change`:
-  - [ ] Accept: pendingChangeId
-  - [ ] Update Feature status
-  - [ ] Mark PendingChange as approved
-  - [ ] Notify proposer
-- [ ] Create `POST /api/feature/[id]/reject-status-change`:
-  - [ ] Mark PendingChange as rejected
-  - [ ] Notify proposer with reason
-- [ ] Create `GET /api/project/[id]/pending-changes`:
-  - [ ] Return all pending status changes for project
-  - [ ] Used for notification counter
+- [x] Create PendingChange model:
+  - [x] `featureId`
+  - [x] `proposedBy` (userId)
+  - [x] `fromStatus`
+  - [x] `toStatus`
+  - [x] `status` (pending/approved/rejected)
+  - [x] `createdAt`
+- [x] Create `POST /api/feature/[id]/propose-status-change`:
+  - [x] Accept: newStatus
+  - [x] Create PendingChange record
+  - [x] Return: pendingChangeId
+- [x] Create `POST /api/feature/[id]/approve-status-change`:
+  - [x] Accept: pendingChangeId
+  - [x] Update Feature status
+  - [x] Mark PendingChange as approved
+  - [x] Notify proposer
+- [x] Create `POST /api/feature/[id]/reject-status-change`:
+  - [x] Mark PendingChange as rejected
+  - [x] Notify proposer with reason
+- [x] Create `GET /api/project/[id]/pending-changes`:
+  - [x] Return all pending status changes for project
+  - [x] Used for notification counter
 
 **API Changes:**
 - New endpoint: `POST /api/feature/[id]/propose-status-change` (Engineers, PMs, Admins)
@@ -283,10 +283,10 @@ CREATE INDEX idx_pending_changes_account_id ON pending_changes(account_id);
 - [ ] Test on mobile devices (if supported)
 
 **Completion Checklist:**
-- [ ] All backend tasks complete
+- [x] All backend tasks complete
 - [ ] All frontend tasks complete
-- [ ] Database migration applied
-- [ ] API documentation updated
+- [x] Database migration applied
+- [x] API documentation updated
 - [ ] Feature documentation created
 - [ ] Backend summary updated
 - [ ] Frontend summary updated
@@ -495,6 +495,7 @@ Ensure PMs only see their own projects, co-owners see shared projects, and Admin
 
 **Total Phases:** 14  
 **Completed:** 11  
+**Backend Complete (Phase 12):** 1  
 **Remaining:** 3
 
 **New Features Added:**

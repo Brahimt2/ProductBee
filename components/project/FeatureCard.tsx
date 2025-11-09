@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, Clock } from 'lucide-react'
+import { AlertCircle, Clock, ClockIcon } from 'lucide-react'
 import type { FeatureResponse } from '@/types'
 
 interface FeatureCardProps {
@@ -8,6 +8,7 @@ interface FeatureCardProps {
   onClick: () => void
   canEdit?: boolean
   onStatusChange?: (featureId: string, newStatus: FeatureResponse['status']) => void
+  pendingChangeId?: string | null
 }
 
 // Priority color mapping
@@ -17,25 +18,42 @@ const priorityColors: Record<string, string> = {
   P2: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
 }
 
-export default function FeatureCard({ feature, onClick, canEdit, onStatusChange }: FeatureCardProps) {
-  // Props are accepted for future use but not implemented yet
-  // Status changes will be handled in FeatureModal or via drag-and-drop
+export default function FeatureCard({
+  feature,
+  onClick,
+  canEdit,
+  onStatusChange,
+  pendingChangeId,
+}: FeatureCardProps) {
   return (
     <div
       onClick={onClick}
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700"
+      className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow border ${
+        pendingChangeId
+          ? 'border-yellow-400 dark:border-yellow-600 border-2'
+          : 'border-gray-200 dark:border-gray-700'
+      }`}
     >
       <div className="flex items-start justify-between mb-2">
         <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
           {feature.title}
         </h4>
-        <span
-          className={`px-2 py-1 rounded text-xs font-medium ${
-            priorityColors[feature.priority] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-          }`}
-        >
-          {feature.priority}
-        </span>
+        <div className="flex items-center gap-2">
+          {pendingChangeId && (
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 flex items-center gap-1">
+              <ClockIcon className="w-3 h-3" />
+              Pending
+            </span>
+          )}
+          <span
+            className={`px-2 py-1 rounded text-xs font-medium ${
+              priorityColors[feature.priority] ||
+              'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+            }`}
+          >
+            {feature.priority}
+          </span>
+        </div>
       </div>
       <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 line-clamp-2">
         {feature.description}

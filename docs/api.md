@@ -64,6 +64,10 @@ All endpoints enforce account isolation:
 | `GET /api/team/members/available` | ✅ | ✅ | ✅ | ✅ |
 | `POST /api/chat/generate-tickets` | ❌ | ❌ | ✅ | ✅ |
 | `POST /api/chat/apply-tickets` | ❌ | ❌ | ✅ | ✅ |
+| `POST /api/feature/:id/propose-status-change` | ❌ | ✅ | ✅ | ✅ |
+| `POST /api/feature/:id/approve-status-change` | ❌ | ❌ | ✅ | ✅ |
+| `POST /api/feature/:id/reject-status-change` | ❌ | ❌ | ✅ | ✅ |
+| `GET /api/project/:id/pending-changes` | ✅ | ✅ | ✅ | ✅ |
 
 ## Database vs API Format Conversions
 
@@ -949,6 +953,229 @@ Bulk create tickets from AI chat suggestions. Creates multiple tickets with AI-s
 
 ---
 
+# Pending Status Changes (Phase 12: Drag-and-Drop with Two-Way Confirmation)
+
+## POST `/api/feature/:id/propose-status-change`
+
+Proposes a status change for a feature. Creates a pending change that requires approval from a PM or Admin.
+
+**Parameters:**
+- `id` (path) - Feature UUID
+
+**Permissions:** Engineers, PMs, and Admins (any authenticated user except Viewers)
+
+**Request Body:**
+```json
+{
+  "newStatus": "in_progress"
+}
+```
+
+**Validation:**
+- `newStatus` (required) - One of: `not_started`, `in_progress`, `blocked`, `complete`
+- New status must be different from current status
+- Only one pending change can exist per feature at a time
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "pendingChange": {
+      "_id": "uuid",
+      "id": "uuid",
+      "featureId": "uuid",
+      "proposedBy": {
+        "_id": "user-uuid",
+        "name": "John Doe",
+        "email": "john@example.com"
+      },
+      "fromStatus": "not_started",
+      "toStatus": "in_progress",
+      "status": "pending",
+      "rejectionReason": null,
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Feature not accessible (different account)
+- `404 NOT_FOUND` - Feature not found
+- `400 BAD_REQUEST` - Invalid status, status unchanged, or pending change already exists
+- `500 INTERNAL_ERROR` - Database error
+
+## POST `/api/feature/:id/approve-status-change`
+
+Approves a pending status change and updates the feature status. Only PMs and Admins can approve changes.
+
+**Parameters:**
+- `id` (path) - Feature UUID
+
+**Permissions:** PM or Admin only
+
+**Request Body:**
+```json
+{
+  "pendingChangeId": "uuid"
+}
+```
+
+**Validation:**
+- `pendingChangeId` (required) - Valid UUID of pending change
+- Pending change must belong to the specified feature
+- Pending change must be in "pending" status
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Status change approved and feature updated",
+    "pendingChange": {
+      "_id": "uuid",
+      "id": "uuid",
+      "featureId": "uuid",
+      "proposedBy": {
+        "_id": "user-uuid",
+        "name": "John Doe",
+        "email": "john@example.com"
+      },
+      "fromStatus": "not_started",
+      "toStatus": "in_progress",
+      "status": "approved",
+      "rejectionReason": null,
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    "feature": {
+      "_id": "uuid",
+      "id": "uuid",
+      "projectId": "uuid",
+      "title": "Feature Title",
+      "description": "Feature description",
+      "status": "in_progress",
+      "priority": "high",
+      "effortEstimateWeeks": 2,
+      "dependsOn": [],
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin, or feature not accessible
+- `404 NOT_FOUND` - Feature or pending change not found
+- `400 BAD_REQUEST` - Pending change already processed or doesn't belong to feature
+- `500 INTERNAL_ERROR` - Database error
+
+## POST `/api/feature/:id/reject-status-change`
+
+Rejects a pending status change. Only PMs and Admins can reject changes. Optionally includes a rejection reason.
+
+**Parameters:**
+- `id` (path) - Feature UUID
+
+**Permissions:** PM or Admin only
+
+**Request Body:**
+```json
+{
+  "pendingChangeId": "uuid",
+  "reason": "Optional rejection reason"
+}
+```
+
+**Validation:**
+- `pendingChangeId` (required) - Valid UUID of pending change
+- `reason` (optional) - String explanation for rejection
+- Pending change must belong to the specified feature
+- Pending change must be in "pending" status
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Status change rejected: Optional rejection reason",
+    "pendingChange": {
+      "_id": "uuid",
+      "id": "uuid",
+      "featureId": "uuid",
+      "proposedBy": {
+        "_id": "user-uuid",
+        "name": "John Doe",
+        "email": "john@example.com"
+      },
+      "fromStatus": "not_started",
+      "toStatus": "in_progress",
+      "status": "rejected",
+      "rejectionReason": "Optional rejection reason",
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Not PM or Admin, or feature not accessible
+- `404 NOT_FOUND` - Feature or pending change not found
+- `400 BAD_REQUEST` - Pending change already processed or doesn't belong to feature
+- `500 INTERNAL_ERROR` - Database error
+
+## GET `/api/project/:id/pending-changes`
+
+Returns all pending status changes for features in a project. Used for notification counters and approval UI.
+
+**Parameters:**
+- `id` (path) - Project UUID
+
+**Permissions:** All authenticated users (project must belong to user's account)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "pendingChanges": [
+      {
+        "_id": "uuid",
+        "id": "uuid",
+        "featureId": "uuid",
+        "proposedBy": {
+          "_id": "user-uuid",
+          "name": "John Doe",
+          "email": "john@example.com"
+        },
+        "fromStatus": "not_started",
+        "toStatus": "in_progress",
+        "status": "pending",
+        "rejectionReason": null,
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- Only returns pending changes (status: "pending")
+- Ordered by creation date (newest first)
+- Empty array if no pending changes exist
+
+**Error Responses:**
+- `401 UNAUTHORIZED` - Not authenticated
+- `403 FORBIDDEN` - Project not accessible (different account)
+- `404 NOT_FOUND` - Project not found
+- `400 BAD_REQUEST` - Invalid project ID format
+- `500 INTERNAL_ERROR` - Database error
+
+---
+
 # Type Definitions
 
 ## ProjectResponse
@@ -1095,6 +1322,26 @@ Same as `UserProfileResponse` but includes:
 }
 ```
 
+## PendingChangeResponse (Phase 12)
+
+```typescript
+{
+  _id: string
+  id: string
+  featureId: string
+  proposedBy: {
+    _id: string
+    name: string
+    email: string
+  }
+  fromStatus: 'not_started' | 'in_progress' | 'blocked' | 'complete'
+  toStatus: 'not_started' | 'in_progress' | 'blocked' | 'complete'
+  status: 'pending' | 'approved' | 'rejected'
+  rejectionReason?: string | null
+  createdAt: string
+}
+```
+
 ---
 
 # Rate Limiting
@@ -1109,4 +1356,5 @@ The application uses Supabase Realtime for live updates. When data changes in th
 - `projects` - Project list updates
 - `features` - Feature status/assignment changes
 - `feedback` - New feedback and status changes
+- `pending_changes` - Pending status change proposals and approvals (Phase 12)
 

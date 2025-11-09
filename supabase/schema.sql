@@ -80,6 +80,19 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Pending changes table (Phase 12: Drag-and-Drop with Two-Way Confirmation)
+CREATE TABLE IF NOT EXISTS pending_changes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  feature_id UUID NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+  proposed_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_status TEXT NOT NULL,
+  to_status TEXT NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+  account_id TEXT NOT NULL,
+  rejection_reason TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_auth0_id ON users(auth0_id);
 CREATE INDEX IF NOT EXISTS idx_users_account_id ON users(account_id);
@@ -100,12 +113,18 @@ CREATE INDEX IF NOT EXISTS idx_feedback_project_id ON feedback(project_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_feature_id ON feedback(feature_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_account_id ON feedback(account_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback(status);
+CREATE INDEX IF NOT EXISTS idx_pending_changes_feature_id ON pending_changes(feature_id);
+CREATE INDEX IF NOT EXISTS idx_pending_changes_account_id ON pending_changes(account_id);
+CREATE INDEX IF NOT EXISTS idx_pending_changes_proposed_by ON pending_changes(proposed_by);
+CREATE INDEX IF NOT EXISTS idx_pending_changes_status ON pending_changes(status);
+CREATE INDEX IF NOT EXISTS idx_pending_changes_created_at ON pending_changes(created_at);
 
 -- Enable real-time for tables (requires Supabase Realtime to be enabled)
 -- Note: You may need to enable Realtime in your Supabase project settings
 ALTER PUBLICATION supabase_realtime ADD TABLE projects;
 ALTER PUBLICATION supabase_realtime ADD TABLE features;
 ALTER PUBLICATION supabase_realtime ADD TABLE feedback;
+ALTER PUBLICATION supabase_realtime ADD TABLE pending_changes;
 
 -- Row Level Security (RLS) Policies
 -- Note: Since we're using Auth0, we'll disable RLS for now and handle authorization in the API layer
@@ -116,6 +135,7 @@ ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE projects DISABLE ROW LEVEL SECURITY;
 ALTER TABLE features DISABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback DISABLE ROW LEVEL SECURITY;
+ALTER TABLE pending_changes DISABLE ROW LEVEL SECURITY;
 
 -- If you want to enable RLS later with Auth0 integration, you would need to:
 -- 1. Create a function to verify Auth0 JWT tokens

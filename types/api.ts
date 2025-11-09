@@ -342,3 +342,52 @@ export interface ApplyTicketsResponse {
   createdTicketIds: string[]
   message: string
 }
+
+// Pending Change API Types (Phase 12)
+export interface ProposeStatusChangeRequest {
+  newStatus: 'not_started' | 'in_progress' | 'blocked' | 'complete'
+}
+
+export interface PendingChangeResponse {
+  _id: string
+  id: string
+  featureId: string
+  proposedBy: {
+    _id: string
+    name: string
+    email: string
+  }
+  fromStatus: 'not_started' | 'in_progress' | 'blocked' | 'complete'
+  toStatus: 'not_started' | 'in_progress' | 'blocked' | 'complete'
+  status: 'pending' | 'approved' | 'rejected'
+  rejectionReason?: string | null
+  createdAt: string
+}
+
+export interface ProposeStatusChangeResponse {
+  pendingChange: PendingChangeResponse
+}
+
+export interface ApproveStatusChangeRequest {
+  pendingChangeId: string
+}
+
+export interface ApproveStatusChangeResponse {
+  message: string
+  pendingChange: PendingChangeResponse
+  feature: FeatureResponse
+}
+
+export interface RejectStatusChangeRequest {
+  pendingChangeId: string
+  reason?: string
+}
+
+export interface RejectStatusChangeResponse {
+  message: string
+  pendingChange: PendingChangeResponse
+}
+
+export interface GetPendingChangesResponse {
+  pendingChanges: PendingChangeResponse[]
+}

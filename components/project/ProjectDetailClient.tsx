@@ -4,9 +4,29 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@auth0/nextjs-auth0/client'
 import { ArrowLeft, AlertCircle, Sparkles } from 'lucide-react'
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { ROLES, FEATURE_STATUS } from '@/lib/constants'
 import { useProject } from '@/hooks/useProject'
 import { useFeature } from '@/hooks/useFeature'
+import { usePendingChanges } from '@/hooks/usePendingChanges'
 import FeatureCard from './FeatureCard'
 import FeatureModal from './FeatureModal'
 import TicketCreateForm from './TicketCreateForm'
@@ -14,6 +34,8 @@ import GanttView from './GanttView'
 import ViewToggle, { type ViewType } from './ViewToggle'
 import ChatInterface from './ChatInterface'
 import TicketGenerationControls from './TicketGenerationControls'
+import PendingChangesNotification from './PendingChangesNotification'
+import PendingChangesList from '@/components/modals/PendingChangesList'
 import type { GetProjectResponse, FeatureResponse } from '@/types'
 
 interface ProjectDetailClientProps {
@@ -36,6 +58,98 @@ const columns = [
   { id: FEATURE_STATUS.COMPLETE, title: 'Complete' },
 ]
 
+// Draggable Feature Card Component
+function DraggableFeatureCard({
+  feature,
+  onClick,
+  canEdit,
+  pendingChangeId,
+}: {
+  feature: FeatureResponse
+  onClick: () => void
+  canEdit?: boolean
+  pendingChangeId?: string | null
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: feature._id || feature.id,
+    disabled: !canEdit || !!pendingChangeId,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <FeatureCard
+        feature={feature}
+        onClick={onClick}
+        canEdit={canEdit}
+        pendingChangeId={pendingChangeId}
+      />
+    </div>
+  )
+}
+
+// Droppable Column Component
+function DroppableColumn({
+  columnId,
+  title,
+  features,
+  onFeatureClick,
+  canEdit,
+  pendingChangesMap,
+}: {
+  columnId: string
+  title: string
+  features: FeatureResponse[]
+  onFeatureClick: (feature: FeatureResponse) => void
+  canEdit?: boolean
+  pendingChangesMap: Map<string, string>
+}) {
+  const featureIds = features.map((f) => f._id || f.id)
+  const { setNodeRef, isOver } = useDroppable({
+    id: columnId,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border ${
+        isOver
+          ? 'border-blue-400 dark:border-blue-600 border-2'
+          : 'border-gray-200 dark:border-gray-700'
+      }`}
+    >
+      <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
+        {title} ({features.length})
+      </h3>
+      <SortableContext items={featureIds} strategy={verticalListSortingStrategy}>
+        <div className="space-y-3 min-h-[200px]">
+          {features.map((feature) => {
+            const featureId = feature._id || feature.id
+            const pendingChangeId = pendingChangesMap.get(featureId)
+            return (
+              <DraggableFeatureCard
+                key={featureId}
+                feature={feature}
+                onClick={() => onFeatureClick(feature)}
+                canEdit={canEdit}
+                pendingChangeId={pendingChangeId}
+              />
+            )
+          })}
+          {features.length === 0 && (
+            <div className="text-center py-8 text-gray-400 text-sm">No features</div>
+          )}
+        </div>
+      </SortableContext>
+    </div>
+  )
+}
+
 export default function ProjectDetailClient({
   projectData: initialData,
   userRole,
@@ -45,7 +159,10 @@ export default function ProjectDetailClient({
   const [selectedFeature, setSelectedFeature] = useState<FeatureResponse | null>(null)
   const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
-  
+  const [isPendingChangesOpen, setIsPendingChangesOpen] = useState(false)
+  const [activeFeature, setActiveFeature] = useState<FeatureResponse | null>(null)
+  const [optimisticFeatures, setOptimisticFeatures] = useState<FeatureResponse[] | null>(null)
+
   // View state with localStorage persistence (default to 'gantt')
   const [currentView, setCurrentView] = useState<ViewType>(() => {
     if (typeof window !== 'undefined') {
@@ -65,15 +182,53 @@ export default function ProjectDetailClient({
   const projectId = initialData.project._id || initialData.project.id
   const { projectData, refetch } = useProject(projectId)
   const { updateFeatureStatus } = useFeature()
+  const {
+    pendingChanges,
+    count: pendingCount,
+    fetchPendingChanges,
+    proposeStatusChange,
+    approveStatusChange,
+    rejectStatusChange,
+    isProposing,
+    isApproving,
+    isRejecting,
+  } = usePendingChanges()
+
+  // Fetch pending changes on mount and when project data changes
+  useEffect(() => {
+    if (projectId) {
+      fetchPendingChanges(projectId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
+  // Create a map of feature IDs to pending change IDs for quick lookup
+  const pendingChangesMap = new Map<string, string>()
+  pendingChanges.forEach((change) => {
+    pendingChangesMap.set(change.featureId, change.id)
+  })
 
   // Use hook data if available and loaded, otherwise use initial data
-  const displayData = projectData && projectData.project ? projectData : initialData
+  const baseData = projectData && projectData.project ? projectData : initialData
+  
+  // Apply optimistic updates if available
+  const displayData = optimisticFeatures
+    ? { ...baseData, features: optimisticFeatures }
+    : baseData
 
   // Permission checks
   const isViewer = userRole === ROLES.VIEWER
   const isPMOrAdmin = userRole === ROLES.PM || userRole === ROLES.ADMIN
   const canEdit = !isViewer // Only viewers are read-only
   const canApprove = isPMOrAdmin // Only PM and Admin can approve proposals
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   const handleFeatureClick = (feature: FeatureResponse) => {
     setSelectedFeature(feature)
@@ -86,6 +241,79 @@ export default function ProjectDetailClient({
     }
     const result = await updateFeatureStatus(featureId, newStatus)
     if (result) {
+      refetch()
+      fetchPendingChanges(projectId)
+    }
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event
+    const feature = displayData.features.find((f) => (f._id || f.id) === active.id)
+    if (feature) {
+      setActiveFeature(feature)
+    }
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveFeature(null)
+    setOptimisticFeatures(null)
+
+    if (!over || !canEdit) {
+      return
+    }
+
+    const featureId = active.id as string
+    const newStatus = over.id as string
+
+    // Find the feature
+    const feature = displayData.features.find((f) => (f._id || f.id) === featureId)
+    if (!feature) {
+      return
+    }
+
+    // Check if status is actually changing
+    if (feature.status === newStatus) {
+      return
+    }
+
+    // Check if there's already a pending change for this feature
+    if (pendingChangesMap.has(featureId)) {
+      return
+    }
+
+    // Optimistic UI update
+    const updatedFeatures = displayData.features.map((f) =>
+      f._id === featureId || f.id === featureId ? { ...f, status: newStatus } : f
+    )
+    setOptimisticFeatures(updatedFeatures)
+
+    // Propose status change
+    const result = await proposeStatusChange(featureId, newStatus)
+
+    if (result) {
+      // Refresh pending changes
+      await fetchPendingChanges(projectId)
+      // Refresh project data to get updated feature statuses
+      refetch()
+    } else {
+      // Revert optimistic update on error
+      setOptimisticFeatures(null)
+    }
+  }
+
+  const handleApprove = async (featureId: string, pendingChangeId: string) => {
+    const success = await approveStatusChange(featureId, pendingChangeId)
+    if (success) {
+      await fetchPendingChanges(projectId)
+      refetch()
+    }
+  }
+
+  const handleReject = async (featureId: string, pendingChangeId: string, reason?: string) => {
+    const success = await rejectStatusChange(featureId, pendingChangeId, reason)
+    if (success) {
+      await fetchPendingChanges(projectId)
       refetch()
     }
   }
@@ -169,6 +397,12 @@ export default function ProjectDetailClient({
             Features
           </h2>
           <div className="flex items-center gap-4">
+            {pendingCount > 0 && (
+              <PendingChangesNotification
+                count={pendingCount}
+                onClick={() => setIsPendingChangesOpen(true)}
+              />
+            )}
             <ViewToggle currentView={currentView} onViewChange={setCurrentView} />
             {!isViewer && (
               <>
@@ -198,37 +432,40 @@ export default function ProjectDetailClient({
             onTaskClick={handleFeatureClick}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {columns.map((column) => {
-              const features = getFeaturesByStatus(column.id)
-              return (
-                <div
-                  key={column.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700"
-                >
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
-                    {column.title} ({features.length})
-                  </h3>
-                  <div className="space-y-3 min-h-[200px]">
-                    {features.map((feature) => (
-                      <FeatureCard
-                        key={feature._id || feature.id}
-                        feature={feature}
-                        onClick={() => handleFeatureClick(feature)}
-                        canEdit={canEdit}
-                        onStatusChange={canEdit ? (featureId, newStatus) => handleFeatureUpdate(featureId, newStatus) : undefined}
-                      />
-                    ))}
-                    {features.length === 0 && (
-                      <div className="text-center py-8 text-gray-400 text-sm">
-                        No features
-                      </div>
-                    )}
-                  </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {columns.map((column) => {
+                const features = getFeaturesByStatus(column.id)
+                return (
+                  <DroppableColumn
+                    key={column.id}
+                    columnId={column.id}
+                    title={column.title}
+                    features={features}
+                    onFeatureClick={handleFeatureClick}
+                    canEdit={canEdit}
+                    pendingChangesMap={pendingChangesMap}
+                  />
+                )
+              })}
+            </div>
+            <DragOverlay>
+              {activeFeature ? (
+                <div className="opacity-50">
+                  <FeatureCard
+                    feature={activeFeature}
+                    onClick={() => {}}
+                    canEdit={canEdit}
+                  />
                 </div>
-              )
-            })}
-          </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
       </main>
 
@@ -272,6 +509,18 @@ export default function ProjectDetailClient({
           }}
         />
       )}
+
+      {/* Pending Changes Modal */}
+      <PendingChangesList
+        isOpen={isPendingChangesOpen}
+        onClose={() => setIsPendingChangesOpen(false)}
+        pendingChanges={pendingChanges}
+        features={displayData.features}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        isApproving={isApproving}
+        isRejecting={isRejecting}
+      />
     </div>
   )
 }

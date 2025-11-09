@@ -9,6 +9,7 @@ import {
   SPECIALIZATIONS,
   TICKET_TYPES,
   ROLES,
+  PENDING_CHANGE_STATUS,
 } from '@/lib/constants'
 
 /**
@@ -280,6 +281,16 @@ export function validateLabels(labels: string[] | null | undefined): void {
  */
 export function sanitizeString(input: string): string {
   return input.trim().replace(/[<>]/g, '')
+}
+
+/**
+ * Validate pending change status (Phase 12)
+ */
+export function validatePendingChangeStatus(status: string): void {
+  const validStatuses = Object.values(PENDING_CHANGE_STATUS)
+  if (!validStatuses.includes(status as any)) {
+    throw APIErrors.badRequest(`Invalid pending change status. Must be one of: ${validStatuses.join(', ')}`)
+  }
 }
 
 /**

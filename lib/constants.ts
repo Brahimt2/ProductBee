@@ -105,6 +105,15 @@ export const TICKET_TYPES = {
 
 export type TicketType = typeof TICKET_TYPES[keyof typeof TICKET_TYPES]
 
+// Pending Change Status (Phase 12)
+export const PENDING_CHANGE_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+} as const
+
+export type PendingChangeStatus = typeof PENDING_CHANGE_STATUS[keyof typeof PENDING_CHANGE_STATUS]
+
 // API Response Codes
 export const HTTP_STATUS = {
   OK: 200,
