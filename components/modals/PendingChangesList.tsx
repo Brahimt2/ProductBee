@@ -44,16 +44,25 @@ export default function PendingChangesList({
   }
 
   const handleReject = async (featureId: string, pendingChangeId: string) => {
-    setRejectingId(pendingChangeId)
-    const reason = rejectionReasons[pendingChangeId] || undefined
-    await onReject(featureId, pendingChangeId, reason)
-    setRejectingId(null)
-    // Clear rejection reason after rejection
-    setRejectionReasons((prev) => {
-      const updated = { ...prev }
-      delete updated[pendingChangeId]
-      return updated
-    })
+    try {
+      setRejectingId(pendingChangeId)
+      const reason = rejectionReasons[pendingChangeId] || undefined
+      await onReject(featureId, pendingChangeId, reason)
+      
+      // Clear rejection reason after successful rejection
+      setRejectionReasons((prev) => {
+        const updated = { ...prev }
+        delete updated[pendingChangeId]
+        return updated
+      })
+    } catch (error) {
+      // Error is already handled by onReject (toast notification in hook)
+      // But we still need to log it for debugging
+      console.error('Error rejecting status change:', error)
+    } finally {
+      // Always reset rejectingId, even if rejection fails
+      setRejectingId(null)
+    }
   }
 
   return (
@@ -82,12 +91,14 @@ export default function PendingChangesList({
             <div className="space-y-4">
               {pendingChanges.map((change) => {
                 const featureTitle = getFeatureTitle(change.featureId)
-                const isRejecting = rejectingId === change.id
-                const showReasonInput = rejectingId === change.id
+                // Use both id and _id for comparison to handle ID variations
+                const changeId = change.id || change._id
+                const isRejecting = rejectingId === changeId
+                const showReasonInput = rejectingId === changeId
 
                 return (
                   <div
-                    key={change.id}
+                    key={changeId}
                     className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900"
                   >
                     <div className="flex items-start justify-between mb-3">
@@ -116,11 +127,11 @@ export default function PendingChangesList({
                     {showReasonInput && (
                       <div className="mb-3">
                         <textarea
-                          value={rejectionReasons[change.id] || ''}
+                          value={rejectionReasons[changeId] || ''}
                           onChange={(e) =>
                             setRejectionReasons((prev) => ({
                               ...prev,
-                              [change.id]: e.target.value,
+                              [changeId]: e.target.value,
                             }))
                           }
                           placeholder="Optional: Provide a reason for rejection..."
@@ -133,7 +144,7 @@ export default function PendingChangesList({
                     {/* Actions */}
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => onApprove(change.featureId, change.id)}
+                        onClick={() => onApprove(change.featureId, changeId)}
                         disabled={isApproving || isRejecting}
                         className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
@@ -143,9 +154,9 @@ export default function PendingChangesList({
                       <button
                         onClick={() => {
                           if (showReasonInput) {
-                            handleReject(change.featureId, change.id)
+                            handleReject(change.featureId, changeId)
                           } else {
-                            setRejectingId(change.id)
+                            setRejectingId(changeId)
                           }
                         }}
                         disabled={isApproving || isRejecting}
@@ -160,11 +171,12 @@ export default function PendingChangesList({
                             setRejectingId(null)
                             setRejectionReasons((prev) => {
                               const updated = { ...prev }
-                              delete updated[change.id]
+                              delete updated[changeId]
                               return updated
                             })
                           }}
-                          className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                          disabled={isRejecting}
+                          className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           Cancel
                         </button>

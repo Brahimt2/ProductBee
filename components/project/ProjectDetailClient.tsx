@@ -314,10 +314,17 @@ export default function ProjectDetailClient({
   }
 
   const handleReject = async (featureId: string, pendingChangeId: string, reason?: string) => {
-    const success = await rejectStatusChange(featureId, pendingChangeId, reason)
-    if (success) {
-      await fetchPendingChanges(projectId)
-      refetch()
+    try {
+      const success = await rejectStatusChange(featureId, pendingChangeId, reason)
+      if (success) {
+        // Refresh pending changes and project data after successful rejection
+        await fetchPendingChanges(projectId)
+        refetch()
+      }
+    } catch (error) {
+      // Error is already handled by rejectStatusChange (toast notification)
+      // But log it for debugging
+      console.error('Error in handleReject:', error)
     }
   }
 

@@ -182,13 +182,93 @@ Check that the API endpoint `/api/feature/:id/reject-status-change` is being cal
 
 ## Completion Criteria
 
-- [ ] Error handling added to `handleReject` function
-- [ ] State is always reset (even on error)
-- [ ] Rejection works with and without reason
-- [ ] Error messages are displayed properly
-- [ ] All tests pass (basic, with reason, error handling, edge cases)
-- [ ] No console errors
+- [x] Error handling added to `handleReject` function
+- [x] State is always reset (even on error)
+- [x] Rejection works with and without reason
+- [x] Error messages are displayed properly (via hook's toast notifications)
+- [x] ID comparison fixed to handle both `id` and `_id`
+- [ ] All tests pass (basic, with reason, error handling, edge cases) - Ready for testing
+- [ ] No console errors - Ready for testing
 - [ ] Code reviewed and approved
+
+## Implementation Complete ✅
+
+**Fixed by:** Frontend Agent  
+**Date:** 2024  
+**Status:** Implementation complete, ready for testing
+
+### Changes Made
+
+#### 1. **Fixed Error Handling in `PendingChangesList.tsx`**
+
+Added try-catch-finally block to `handleReject` function:
+
+```ts
+const handleReject = async (featureId: string, pendingChangeId: string) => {
+  try {
+    setRejectingId(pendingChangeId)
+    const reason = rejectionReasons[pendingChangeId] || undefined
+    await onReject(featureId, pendingChangeId, reason)
+    
+    // Clear rejection reason after successful rejection
+    setRejectionReasons((prev) => {
+      const updated = { ...prev }
+      delete updated[pendingChangeId]
+      return updated
+    })
+  } catch (error) {
+    // Error is already handled by onReject (toast notification in hook)
+    // But we still need to log it for debugging
+    console.error('Error rejecting status change:', error)
+  } finally {
+    // Always reset rejectingId, even if rejection fails
+    setRejectingId(null)
+  }
+}
+```
+
+#### 2. **Fixed ID Comparison**
+
+Updated ID handling to support both `id` and `_id` fields:
+
+- In `PendingChangesList.tsx`: Uses `changeId = change.id || change._id` for consistency
+- In `usePendingChanges.ts`: Updated filter functions to check both `id` and `_id` when comparing
+
+#### 3. **Improved Button States**
+
+- Added proper disabled state to Cancel button during rejection
+- Fixed duplicate disabled condition on Approve button
+- All buttons properly disabled during async operations
+
+### How It Works
+
+1. **Error Handling:** The `handleReject` function now uses try-catch-finally to ensure state is always reset, even if the rejection fails.
+
+2. **State Management:** 
+   - `rejectingId` is set when rejection starts
+   - `rejectingId` is always reset in the `finally` block (even on error)
+   - Rejection reasons are cleared only on successful rejection
+   - UI state is properly managed during async operations
+
+3. **ID Consistency:** 
+   - Both `id` and `_id` fields are checked for consistency
+   - Filter functions in the hook handle ID variations correctly
+   - Component uses consistent ID format throughout
+
+4. **Error Propagation:**
+   - Errors are caught and logged in the component
+   - Toast notifications are shown by the hook (already implemented)
+   - UI state is reset even if errors occur
+
+### Testing Notes
+
+- Rejection should work with and without reason
+- Error messages should be displayed via toast notifications
+- UI state should reset properly even on errors
+- Rejection reason input should appear/disappear correctly
+- Cancel button should work and reset state
+- Multiple rejections should be handled correctly
+- ID mismatches should not cause issues
 
 ## Timeline
 

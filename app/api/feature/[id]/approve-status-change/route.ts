@@ -98,11 +98,12 @@ export async function POST(
       throw APIErrors.internalError('Failed to update feature status')
     }
 
-    // Get proposer user info
+    // Get proposer user info (filter by account_id for security)
     const { data: proposer, error: proposerError } = await supabase
       .from('users')
       .select('id, name, email')
       .eq('id', pendingChange.proposed_by)
+      .eq('account_id', user.account_id)
       .single()
 
     if (proposerError || !proposer) {

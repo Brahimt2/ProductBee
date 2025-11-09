@@ -139,8 +139,11 @@ export function usePendingChanges(): UsePendingChangesReturn {
       const data = responseData.data as ApproveStatusChangeResponse
       toast.success(data.message || 'Status change approved successfully')
       
-      // Remove from pending changes list
-      setPendingChanges((prev) => prev.filter((pc) => pc.id !== pendingChangeId))
+      // Remove from pending changes list (check both id and _id for consistency)
+      setPendingChanges((prev) => prev.filter((pc) => {
+        const pcId = pc.id || pc._id
+        return pcId !== pendingChangeId
+      }))
       
       return true
     } catch (err) {
@@ -187,8 +190,11 @@ export function usePendingChanges(): UsePendingChangesReturn {
       const data = responseData.data as RejectStatusChangeResponse
       toast.success(data.message || 'Status change rejected')
       
-      // Remove from pending changes list
-      setPendingChanges((prev) => prev.filter((pc) => pc.id !== pendingChangeId))
+      // Remove from pending changes list (check both id and _id for consistency)
+      setPendingChanges((prev) => prev.filter((pc) => {
+        const pcId = pc.id || pc._id
+        return pcId !== pendingChangeId
+      }))
       
       return true
     } catch (err) {

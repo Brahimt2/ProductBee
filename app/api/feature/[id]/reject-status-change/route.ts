@@ -70,8 +70,9 @@ export async function POST(
       status: PENDING_CHANGE_STATUS.REJECTED,
     }
 
-    if (body.reason) {
-      updateData.rejection_reason = body.reason
+    // Handle rejection reason - store if provided and non-empty, otherwise set to null
+    if (body.reason !== undefined) {
+      updateData.rejection_reason = body.reason && body.reason.trim().length > 0 ? body.reason.trim() : null
     }
 
     const { data: updatedPendingChange, error: updateError } = await supabase
@@ -86,11 +87,12 @@ export async function POST(
       throw APIErrors.internalError('Failed to update pending change')
     }
 
-    // Get proposer user info
+    // Get proposer user info (filter by account_id for security)
     const { data: proposer, error: proposerError } = await supabase
       .from('users')
       .select('id, name, email')
       .eq('id', pendingChange.proposed_by)
+      .eq('account_id', user.account_id)
       .single()
 
     if (proposerError || !proposer) {
@@ -114,10 +116,13 @@ export async function POST(
       createdAt: updatedPendingChange.created_at,
     }
 
+    // Build rejection message
+    const rejectionMessage = updatedPendingChange.rejection_reason
+      ? `Status change rejected: ${updatedPendingChange.rejection_reason}`
+      : 'Status change rejected'
+
     const response: RejectStatusChangeResponse = {
-      message: body.reason 
-        ? `Status change rejected: ${body.reason}` 
-        : 'Status change rejected',
+      message: rejectionMessage,
       pendingChange: formattedPendingChange,
     }
 
