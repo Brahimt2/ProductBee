@@ -26,3 +26,4 @@ export interface UserStory extends BaseModel {
   updated_at?: string
 }
 
+

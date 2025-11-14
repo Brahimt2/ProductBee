@@ -41,3 +41,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE ticket_user_story;
 ALTER TABLE user_stories DISABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_user_story DISABLE ROW LEVEL SECURITY;
 
+
