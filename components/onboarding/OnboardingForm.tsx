@@ -114,10 +114,10 @@ export default function OnboardingForm({ initialRole, initialSpecialization }: O
   return (
     <div className="max-w-2xl mx-auto">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        <h1 className="text-3xl font-bold text-[#0d0d0d] dark:text-white mb-2">
           {isAdmin ? 'Update Profile' : 'Welcome to ProductBee!'}
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mb-8">
+        <p className="text-[#404040] dark:text-gray-400 mb-8">
           {isAdmin 
             ? 'Update your profile settings. Note: Admin role cannot be changed through this form.'
             : "Let's set up your profile. Choose your role to get started."}
@@ -126,9 +126,9 @@ export default function OnboardingForm({ initialRole, initialSpecialization }: O
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Role Selection - Disabled for admins */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            <label className="block text-sm font-medium text-[#404040] dark:text-gray-300 mb-3">
               What's your role? {!isAdmin && <span className="text-red-500">*</span>}
-              {isAdmin && <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">(Admin - cannot be changed)</span>}
+              {isAdmin && <span className="ml-2 text-sm text-[#404040] dark:text-gray-400">(Admin - cannot be changed)</span>}
             </label>
             {isAdmin && (
               <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -147,7 +147,7 @@ export default function OnboardingForm({ initialRole, initialSpecialization }: O
                 className={`p-4 rounded-lg border-2 transition-all ${
                   role === ROLES.PM
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300'
+                    : 'border-[#d9d9d9] dark:border-gray-600 hover:border-[#c9c9c9] dark:hover:border-gray-500 text-[#404040] dark:text-gray-300'
                 }`}
               >
                 <div className="font-semibold mb-1">Product Manager</div>
@@ -188,15 +188,15 @@ export default function OnboardingForm({ initialRole, initialSpecialization }: O
           {/* Specialization Selection (for engineers or admins who want to set specialization) */}
           {(role === ROLES.ENGINEER || isAdmin) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <label className="block text-sm font-medium text-[#404040] dark:text-gray-300 mb-3">
                 What's your specialization? {role === ROLES.ENGINEER && !isAdmin && <span className="text-red-500">*</span>}
-                {isAdmin && <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">(Optional for admins)</span>}
+                {isAdmin && <span className="ml-2 text-sm text-[#404040] dark:text-gray-400">(Optional for admins)</span>}
               </label>
               <select
                 value={specialization || ''}
                 onChange={(e) => setSpecialization(e.target.value || null)}
                 required={role === ROLES.ENGINEER && !isAdmin}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-2 border border-[#d9d9d9] dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-[#0d0d0d] dark:text-white"
               >
                 <option value="">Select specialization...</option>
                 <option value={SPECIALIZATIONS.BACKEND}>{SPECIALIZATIONS.BACKEND}</option>
@@ -204,7 +204,7 @@ export default function OnboardingForm({ initialRole, initialSpecialization }: O
                 <option value={SPECIALIZATIONS.QA}>{SPECIALIZATIONS.QA}</option>
                 <option value={SPECIALIZATIONS.DEVOPS}>{SPECIALIZATIONS.DEVOPS}</option>
               </select>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-2 text-sm text-[#404040] dark:text-gray-400">
                 {isAdmin 
                   ? 'You can set a specialization to help with task assignment, even if you are not an engineer.'
                   : 'This helps us assign tasks that match your expertise.'}
@@ -225,7 +225,7 @@ export default function OnboardingForm({ initialRole, initialSpecialization }: O
               <button
                 type="button"
                 onClick={(e) => handleSkip(e)}
-                className="px-6 py-3 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-semibold rounded-lg transition-colors"
+                className="px-6 py-3 text-[#404040] dark:text-gray-400 hover:text-[#0d0d0d] dark:hover:text-gray-200 font-semibold rounded-lg transition-colors"
               >
                 Skip for now
               </button>

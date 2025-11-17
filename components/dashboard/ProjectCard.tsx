@@ -32,7 +32,7 @@ export default function ProjectCard({ project }: { project: ProjectResponse }) {
 
   return (
     <Link href={`/project/${project._id || project.id}`}>
-      <div className="bg-white rounded-card shadow-soft overflow-hidden cursor-pointer hover:shadow-lg transition-all group">
+      <div className="bg-white dark:bg-gray-800 rounded-card shadow-soft overflow-hidden cursor-pointer hover:shadow-lg transition-all group">
         {/* Image/Background Section */}
         <div className={`h-48 relative overflow-hidden ${!imageUrl ? `bg-gradient-to-br ${gradient}` : ''}`}>
           {/* Met Museum Image */}
@@ -61,7 +61,7 @@ export default function ProjectCard({ project }: { project: ProjectResponse }) {
 
         {/* Description Section */}
         <div className="p-4">
-          <p className="text-[#404040] text-sm line-clamp-3 mb-3">
+          <p className="text-[#404040] dark:text-gray-300 text-sm line-clamp-3 mb-3">
             {project.description || 'No description available.'}
           </p>
           

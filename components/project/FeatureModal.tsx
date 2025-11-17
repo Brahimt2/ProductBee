@@ -144,23 +144,23 @@ export default function FeatureModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-card shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="sticky top-0 bg-white border-b border-[#d9d9d9] px-6 py-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-card shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-[#d9d9d9] dark:border-gray-700 px-6 py-4">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-[#0d0d0d] mb-2">
+              <h2 className="text-2xl font-bold text-[#0d0d0d] dark:text-white mb-2">
                 {feature.title}
               </h2>
               <div className="flex items-center gap-3">
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    priorityColors[feature.priority] || 'bg-gray-100 text-gray-800'
+                    priorityColors[feature.priority] || 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                   }`}
                 >
                   {feature.priority}
                 </span>
-                <div className="flex items-center gap-1 text-sm text-[#404040]">
+                <div className="flex items-center gap-1 text-sm text-[#404040] dark:text-gray-300">
                   <Clock className="w-4 h-4" />
                   <span>{feature.effortEstimateWeeks} weeks</span>
                 </div>
@@ -168,7 +168,7 @@ export default function FeatureModal({
             </div>
             <button
               onClick={onClose}
-              className="text-[#404040] hover:text-[#0d0d0d] transition-colors"
+              className="text-[#404040] dark:text-gray-300 hover:text-[#0d0d0d] dark:hover:text-white transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
@@ -177,10 +177,10 @@ export default function FeatureModal({
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-[#0d0d0d] mb-2">
+            <h3 className="text-lg font-semibold text-[#0d0d0d] dark:text-white mb-2">
               Description
             </h3>
-            <p className="text-[#404040] whitespace-pre-wrap">
+            <p className="text-[#404040] dark:text-gray-300 whitespace-pre-wrap">
               {feature.description}
             </p>
           </div>
@@ -188,7 +188,7 @@ export default function FeatureModal({
           {/* Assignment Section */}
           {hasEditPermission && (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-[#0d0d0d] mb-2 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-[#0d0d0d] dark:text-white mb-2 flex items-center gap-2">
                 <User className="w-5 h-5" />
                 Assignment
               </h3>
@@ -206,7 +206,7 @@ export default function FeatureModal({
                 showAISuggestion={true}
               />
               {feature.assignedTo && (
-                <p className="text-xs text-[#404040] mt-2">
+                <p className="text-xs text-[#404040] dark:text-gray-400 mt-2">
                   Assignment can be changed at any time by users with edit permissions.
                 </p>
               )}
@@ -216,11 +216,11 @@ export default function FeatureModal({
           {/* Assignment Display (Read-only for viewers) */}
           {isViewer && (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-[#0d0d0d] mb-2 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-[#0d0d0d] dark:text-white mb-2 flex items-center gap-2">
                 <User className="w-5 h-5" />
                 Assigned To
               </h3>
-              <p className="text-[#404040]">
+              <p className="text-[#404040] dark:text-gray-300">
                 {assignedMember ? assignedMember.name : 'Unassigned'}
               </p>
             </div>
@@ -239,7 +239,7 @@ export default function FeatureModal({
           )}
 
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-[#0d0d0d] mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-[#0d0d0d] dark:text-white mb-4 flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
               Feedback Thread
             </h3>
@@ -254,14 +254,14 @@ export default function FeatureModal({
           </div>
 
           {!isViewer && (
-            <div className="border-t border-[#d9d9d9] pt-6">
+            <div className="border-t border-[#d9d9d9] dark:border-gray-700 pt-6">
               <div className="flex gap-2 mb-4">
                 <button
                   onClick={() => setActiveTab('comment')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                     activeTab === 'comment'
                       ? 'bg-[#a855f7] text-white'
-                      : 'bg-[#f5f5f5] text-[#404040]'
+                      : 'bg-[#f5f5f5] dark:bg-gray-700 text-[#404040] dark:text-gray-300'
                   }`}
                 >
                   Add Comment
@@ -271,7 +271,7 @@ export default function FeatureModal({
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                     activeTab === 'proposal'
                       ? 'bg-[#a855f7] text-white'
-                      : 'bg-[#f5f5f5] text-[#404040]'
+                      : 'bg-[#f5f5f5] dark:bg-gray-700 text-[#404040] dark:text-gray-300'
                   }`}
                 >
                   Submit Proposal
@@ -284,7 +284,7 @@ export default function FeatureModal({
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   rows={4}
-                  className="w-full px-4 py-2 border border-[#d9d9d9] rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white text-[#0d0d0d]"
+                  className="w-full px-4 py-2 border border-[#d9d9d9] dark:border-gray-600 rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white dark:bg-gray-700 text-[#0d0d0d] dark:text-white"
                   placeholder="Add your comment..."
                 />
                 <button
@@ -302,7 +302,7 @@ export default function FeatureModal({
                   value={proposal}
                   onChange={(e) => setProposal(e.target.value)}
                   rows={6}
-                  className="w-full px-4 py-2 border border-[#d9d9d9] rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white text-[#0d0d0d]"
+                  className="w-full px-4 py-2 border border-[#d9d9d9] dark:border-gray-600 rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white dark:bg-gray-700 text-[#0d0d0d] dark:text-white"
                   placeholder="Describe your proposal for timeline changes, feature modifications, etc..."
                 />
                 <button
@@ -319,8 +319,8 @@ export default function FeatureModal({
           )}
           
           {isViewer && (
-            <div className="border-t border-[#d9d9d9] pt-6">
-              <p className="text-sm text-[#404040] text-center">
+            <div className="border-t border-[#d9d9d9] dark:border-gray-700 pt-6">
+              <p className="text-sm text-[#404040] dark:text-gray-400 text-center">
                 You have view-only access. Contact a PM or Admin to add comments or proposals.
               </p>
             </div>

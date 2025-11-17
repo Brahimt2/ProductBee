@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { UserProvider } from '@auth0/nextjs-auth0/client'
 import { Toaster } from 'react-hot-toast'
+import { ThemeProvider } from '@/components/ThemeProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,11 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* Userprovider wraps  */}
-        <UserProvider> 
-          {children}
-          <Toaster position="top-right" />
-        </UserProvider>
+        <ThemeProvider>
+          <UserProvider> 
+            {children}
+            <Toaster position="top-right" />
+          </UserProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

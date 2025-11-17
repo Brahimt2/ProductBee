@@ -571,12 +571,37 @@ Auth0 errors are handled elegantly:
 ### User Creation Flow
 
 1. User authenticates via Auth0
-2. `getUserFromSession()` checks if user exists in database
-3. If not exists, creates user with:
+2. `getUserFromSession()` checks if user exists in database by `auth0_id`
+3. **Account Linking:** If user doesn't exist by `auth0_id`:
+   - Checks if user exists by email (account linking scenario)
+   - If found, updates existing user's `auth0_id` to link accounts
+   - Preserves all user data (role, account_id, etc.) - only updates `auth0_id`
+   - Handles unique constraint violations on email during user creation
+4. If user doesn't exist, creates new user with:
    - `auth0_id` from session
    - `account_id` from Auth0 metadata (or generated fallback)
    - Default role: `viewer`
-4. User redirected to onboarding if role is `viewer` or engineer without specialization
+5. User redirected to onboarding if role is `viewer` or engineer without specialization
+
+### Account Linking Configuration
+
+**Auth0 Setup:**
+- Enable "Auto-link accounts with same email address" in Auth0 Dashboard
+- This allows users to sign in with different providers (email/password, Google, etc.) using the same email
+- Auth0 automatically links accounts at the Auth0 level
+
+**Database Handling:**
+- The `getUserFromSession()` function in `/lib/api/permissions.ts` handles account linking in the database
+- When a user signs in with a different provider but same email:
+  1. Lookup by `auth0_id` fails (user doesn't exist with new `auth0_id`)
+  2. Fallback lookup by email finds existing user
+  3. Updates existing user's `auth0_id` to the new one
+  4. All user data is preserved (role, account_id, projects, etc.)
+
+**Error Handling:**
+- Account linking conflicts are logged with detailed information
+- Users see: "Account linking conflict. Please contact support." if linking fails
+- Unique constraint violations on email are handled gracefully
 
 ## 🔟 Real-time Setup
 

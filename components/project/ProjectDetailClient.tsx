@@ -116,13 +116,13 @@ function DroppableColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`bg-white rounded-card-inner shadow-soft p-4 border ${
+      className={`bg-white dark:bg-gray-800 rounded-card-inner shadow-soft p-4 border ${
         isOver
-          ? 'border-[#a855f7] border-2'
-          : 'border-[#d9d9d9]'
+          ? 'border-[#a855f7] dark:border-purple-400 border-2'
+          : 'border-[#d9d9d9] dark:border-gray-700'
       }`}
     >
-      <h3 className="font-semibold text-[#0d0d0d] mb-4">
+      <h3 className="font-semibold text-[#0d0d0d] dark:text-white mb-4">
         {title} ({features.length})
       </h3>
       <SortableContext items={featureIds} strategy={verticalListSortingStrategy}>
@@ -141,7 +141,7 @@ function DroppableColumn({
             )
           })}
           {features.length === 0 && (
-            <div className="text-center py-8 text-[#404040] text-sm">No features</div>
+            <div className="text-center py-8 text-[#404040] dark:text-gray-400 text-sm">No features</div>
           )}
         </div>
       </SortableContext>
@@ -340,13 +340,13 @@ export default function ProjectDetailClient({
   const riskLevel = displayData.project.roadmap.riskLevel?.toLowerCase() || 'low'
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5]">
-      <nav className="bg-[#f5f5f5] border-b border-[#d9d9d9]">
+    <div className="min-h-screen bg-[#f5f5f5] dark:bg-gray-900">
+      <nav className="bg-[#f5f5f5] dark:bg-gray-900 border-b border-[#d9d9d9] dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16 gap-4">
             <a
               href="/dashboard"
-              className="flex items-center gap-2 text-[#404040] hover:text-[#0d0d0d] transition-colors"
+              className="flex items-center gap-2 text-[#404040] dark:text-gray-300 hover:text-[#0d0d0d] dark:hover:text-white transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
               Back to Dashboard
@@ -359,10 +359,10 @@ export default function ProjectDetailClient({
         <div className="mb-8">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-[#0d0d0d] mb-2">
+              <h1 className="text-3xl font-bold text-[#0d0d0d] dark:text-white mb-2">
                 {displayData.project.name}
               </h1>
-              <p className="text-[#404040]">
+              <p className="text-[#404040] dark:text-gray-300">
                 {displayData.project.description}
               </p>
             </div>
@@ -379,7 +379,7 @@ export default function ProjectDetailClient({
         {/* View Toggle and Actions */}
         {currentView !== 'user-stories' && (
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-[#0d0d0d]">
+            <h2 className="text-2xl font-bold text-[#0d0d0d] dark:text-white">
               Features
             </h2>
             <div className="flex items-center gap-4">

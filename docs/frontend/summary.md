@@ -1301,6 +1301,118 @@ Added AI alignment check to ticket detail modal:
 
 ---
 
+# **15. Public Landing Page & Auth0 Error Handling**
+
+**Status:** Complete ✅  
+**Dependencies:** None
+
+## **Overview**
+
+Implemented a public landing page and improved Auth0 error handling to prevent redirect loops and provide a better user experience for unauthenticated users.
+
+## **Components Created**
+
+### **Public Landing Page** (`/app/home/page.tsx`)
+
+Server component that displays a public landing page for unauthenticated users.
+
+**Features:**
+- ProductBee branding with logo
+- Welcome message and description
+- "Get Started" and "Sign In" buttons (both link to Auth0 login)
+- Feature highlights (AI-Powered, Real-Time Collaboration, Smart Planning)
+- Responsive design with dark mode support
+- Automatic redirect to `/dashboard` if user is already authenticated
+
+**Styling:**
+- Uses ProductBee design system (`rounded-card`, `shadow-soft`)
+- Matches color scheme (`#a855f7` purple, `#f5f5f5` background)
+- Responsive grid layout for features section
+- Dark mode support
+
+## **Pages Updated**
+
+### **Root Page** (`/app/page.tsx`)
+
+Updated redirect logic:
+- Checks if user is authenticated using `getSession()`
+- If authenticated → redirects to `/dashboard`
+- If not authenticated → redirects to `/home` (public landing page)
+- Prevents redirect loops
+
+### **Error Page** (`/app/api/auth/error/page.tsx`)
+
+Improved error handling:
+- Fixed "Try Again" button for `access_denied` errors:
+  - Clears session first using `/api/auth/logout?returnTo=/api/auth/login`
+  - Prevents redirect loops when users decline authorization
+- Fixed "Go to Home" button for `access_denied` errors:
+  - Clears session first using `/api/auth/logout?returnTo=/home`
+  - For other errors, uses `router.push('/home')`
+- Updated styling to use design system classes (`rounded-card`, `shadow-soft`)
+
+## **Authentication Flow**
+
+1. **Unauthenticated User:**
+   - Visits `/` → Redirected to `/home` (public landing page)
+   - Clicks "Get Started" or "Sign In" → Redirected to Auth0 login
+   - After login → Redirected to `/dashboard`
+
+2. **Authenticated User:**
+   - Visits `/` → Redirected to `/dashboard`
+   - Visits `/home` → Redirected to `/dashboard`
+
+3. **Error Handling:**
+   - `access_denied` errors → Session cleared before retry
+   - Other errors → Standard error handling with retry option
+   - All errors → Option to go to public landing page
+
+## **Features Implemented**
+
+✅ **Public Landing Page:**
+- Created `/app/home/page.tsx` with ProductBee branding
+- Welcome message and feature highlights
+- Responsive design with dark mode support
+- Automatic redirect for authenticated users
+
+✅ **Root Page Updates:**
+- Smart redirect logic based on authentication status
+- Prevents redirect loops
+
+✅ **Error Page Improvements:**
+- Fixed `access_denied` error handling
+- Session clearing before retry for denied access
+- Updated styling to match design system
+- Better user experience for authentication errors
+
+## **Patterns Used**
+
+* **Server Components:** Public landing page and root page use server components for authentication checks
+* **Design System:** Consistent use of `rounded-card`, `shadow-soft`, and color variables
+* **Error Handling:** Proper session management for authentication errors
+* **Responsive Design:** Mobile-friendly layouts with Tailwind breakpoints
+
+## **Files Created/Modified**
+
+### **Created**
+- `/app/home/page.tsx` - Public landing page
+
+### **Modified**
+- `/app/page.tsx` - Updated redirect logic
+- `/app/api/auth/error/page.tsx` - Improved error handling and styling
+
+## **Testing Recommendations**
+
+* Test public landing page rendering
+* Test redirect logic for authenticated/unauthenticated users
+* Test error page with different error types
+* Test `access_denied` error handling (session clearing)
+* Test responsive design on mobile/tablet/desktop
+* Test dark mode support
+* Test navigation flow (home → login → dashboard)
+
+---
+
 # **Next Steps**
 
 * Full constants migration

@@ -56,7 +56,13 @@ export async function GET(
     // Get feedback for this project - filtered by account_id for account isolation
     const { data: feedback, error: feedbackError } = await supabase
       .from('feedback')
-      .select('*')
+      .select(`
+        *,
+        user_id:users!feedback_user_id_fkey (
+          name,
+          email
+        )
+      `)
       .eq('project_id', projectId)
       .eq('account_id', user.account_id)
       .order('created_at', { ascending: false })
@@ -64,28 +70,6 @@ export async function GET(
     if (feedbackError) {
       throw APIErrors.internalError('Failed to fetch feedback')
     }
-
-    // Get unique user IDs from feedback
-    const userIds = [...new Set(feedback?.map((fb: any) => fb.user_id).filter(Boolean) || [])]
-    
-    // Fetch user data for all feedback creators
-    let users: any[] = []
-    if (userIds.length > 0) {
-      const { data: userData, error: usersError } = await supabase
-        .from('users')
-        .select('id, name, email')
-        .in('id', userIds)
-        .eq('account_id', user.account_id)
-      
-      if (!usersError && userData) {
-        users = userData
-      }
-    }
-
-    // Create a map of user IDs to user data
-    const userMap = new Map(
-      (users || []).map((u: any) => [u.id, { _id: u.id, name: u.name, email: u.email }])
-    )
 
     // Group feedback by feature (convert DB format to API format using constants)
     const feedbackByFeature: Record<string, any[]> = {}
@@ -99,7 +83,11 @@ export async function GET(
         id: fb.id,
         projectId: fb.project_id,
         featureId: fb.feature_id,
-        userId: fb.user_id ? (userMap.get(fb.user_id) || null) : null,
+        userId: fb.user_id ? {
+          _id: fb.user_id.id,
+          name: fb.user_id.name,
+          email: fb.user_id.email,
+        } : null,
         type: feedbackTypeToApi(fb.type), // Convert DB -> API using constants
         content: fb.content,
         proposedRoadmap: fb.proposed_roadmap,

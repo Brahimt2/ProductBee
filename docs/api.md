@@ -6,6 +6,23 @@ All endpoints are under `/api`, require Auth0 auth (cookie session), and enforce
 
 All endpoints (except `/api/auth/**`) require authentication via Auth0. The session is stored in HTTP-only cookies and automatically managed by the Auth0 SDK.
 
+### Account Linking
+
+The system supports Auth0 account linking to handle users who sign in with different providers (e.g., email/password vs Google) using the same email address.
+
+**How it works:**
+1. Auth0 should be configured with "Auto-link accounts with same email address" enabled in the Auth0 Dashboard
+2. When a user signs in with a different provider but the same email, Auth0 automatically links the accounts
+3. The `getUserFromSession()` function handles account linking in the database:
+   - If a user lookup by `auth0_id` fails, it checks for an existing user by email
+   - If found, it updates the existing user's `auth0_id` to the new one (preserving all user data)
+   - This prevents duplicate accounts and authentication loops
+
+**Error Handling:**
+- If account linking fails, users see: "Account linking conflict. Please contact support."
+- All account linking attempts are logged for debugging
+- Account linking preserves user data (role, account_id, etc.) - only updates `auth0_id`
+
 ## Response Format
 
 All responses follow this structure:
