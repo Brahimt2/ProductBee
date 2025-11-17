@@ -436,3 +436,4 @@ Frontend can subscribe to pending changes for live updates without polling.
 - Automatic expiration of old pending changes
 - Integration with timeline engine for status-dependent calculations
 
+

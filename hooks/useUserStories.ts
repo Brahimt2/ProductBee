@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
 import type {
   UserStoryResponse,
@@ -32,6 +32,7 @@ interface UseUserStoriesReturn {
 }
 
 const MAX_CACHED_STORIES = 50
+const CACHE_DURATION_MS = 30000 // 30 seconds cache duration
 
 export function useUserStories(): UseUserStoriesReturn {
   const [userStories, setUserStories] = useState<UserStoryResponse[]>([])
@@ -43,36 +44,49 @@ export function useUserStories(): UseUserStoriesReturn {
   const [isAssigning, setIsAssigning] = useState(false)
   const [isCheckingAlignment, setIsCheckingAlignment] = useState(false)
 
-  // Cache state (using React state for cache)
-  const [cache, setCache] = useState<{ stories: UserStoryResponse[]; timestamp: number } | null>(null)
+  // Use ref for cache to avoid dependency issues
+  const cacheRef = useRef<{ stories: UserStoryResponse[]; timestamp: number } | null>(null)
+  const isFetchingRef = useRef(false) // Prevent concurrent fetches
 
   // Load from cache if available
   const loadFromCache = useCallback((): UserStoryResponse[] | null => {
+    const cache = cacheRef.current
     if (cache) {
-      // Cache is valid (no expiration for now, but we can add it later)
-      return cache.stories
+      // Check if cache is still valid
+      const age = Date.now() - cache.timestamp
+      if (age < CACHE_DURATION_MS) {
+        return cache.stories
+      }
+      // Cache expired, clear it
+      cacheRef.current = null
     }
     return null
-  }, [cache])
+  }, [])
 
   // Save to cache
   const saveToCache = useCallback((stories: UserStoryResponse[]) => {
     // Limit to last 50 stories
     const limitedStories = stories.slice(0, MAX_CACHED_STORIES)
-    setCache({
+    cacheRef.current = {
       stories: limitedStories,
       timestamp: Date.now(),
-    })
+    }
   }, [])
 
   // Clear cache
   const clearCache = useCallback(() => {
-    setCache(null)
+    cacheRef.current = null
   }, [])
 
   const fetchUserStories = useCallback(
     async (projectId?: string) => {
+      // Prevent concurrent fetches
+      if (isFetchingRef.current) {
+        return
+      }
+
       try {
+        isFetchingRef.current = true
         setIsLoading(true)
         setError(null)
 
@@ -81,18 +95,28 @@ export function useUserStories(): UseUserStoriesReturn {
         if (cached) {
           setUserStories(cached)
           setIsLoading(false)
-          // Still fetch in background to update cache
-          fetch('/api/user-story')
-            .then((res) => res.json())
-            .then((data) => {
-              if (data.success && data.data?.userStories) {
-                setUserStories(data.data.userStories)
-                saveToCache(data.data.userStories)
-              }
-            })
-            .catch(() => {
-              // Silently fail background fetch
-            })
+          isFetchingRef.current = false
+          // Still fetch in background to update cache, but only if not already fetching
+          // Use a small delay to debounce rapid calls
+          setTimeout(() => {
+            if (!isFetchingRef.current) {
+              isFetchingRef.current = true
+              fetch('/api/user-story')
+                .then((res) => res.json())
+                .then((data) => {
+                  if (data.success && data.data?.userStories) {
+                    setUserStories(data.data.userStories)
+                    saveToCache(data.data.userStories)
+                  }
+                })
+                .catch(() => {
+                  // Silently fail background fetch
+                })
+                .finally(() => {
+                  isFetchingRef.current = false
+                })
+            }
+          }, 1000) // 1 second debounce for background refresh
           return
         }
 
@@ -114,6 +138,7 @@ export function useUserStories(): UseUserStoriesReturn {
         toast.error(message)
       } finally {
         setIsLoading(false)
+        isFetchingRef.current = false
       }
     },
     [loadFromCache, saveToCache]
@@ -164,7 +189,7 @@ export function useUserStories(): UseUserStoriesReturn {
         setIsCreating(false)
       }
     },
-    [loadFromCache, saveToCache]
+    [saveToCache]
   )
 
   const updateUserStory = useCallback(
@@ -217,7 +242,7 @@ export function useUserStories(): UseUserStoriesReturn {
         setIsUpdating(false)
       }
     },
-    [loadFromCache, saveToCache]
+    [saveToCache]
   )
 
   const deleteUserStory = useCallback(
@@ -261,7 +286,7 @@ export function useUserStories(): UseUserStoriesReturn {
         setIsDeleting(false)
       }
     },
-    [loadFromCache, saveToCache]
+    [saveToCache]
   )
 
   const assignUserStoryToTicket = useCallback(

@@ -100,7 +100,7 @@ export default function UserStoriesTab({ projectId, userRole, features }: UserSt
     <div className="space-y-4">
       {/* Description and Create Button */}
       <div className="flex items-start justify-between gap-4 mb-4">
-        <p className="text-sm text-[#404040] flex-1">
+        <p className="text-sm text-[#404040] dark:text-gray-300 flex-1">
           Define user personas and link them to tickets for better alignment. User stories are global and can be used across all projects.
         </p>
         {canEdit && (
@@ -128,17 +128,17 @@ export default function UserStoriesTab({ projectId, userRole, features }: UserSt
       {/* Loading State */}
       {isLoading && userStories.length === 0 && (
         <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a855f7] mx-auto"></div>
-          <p className="text-[#404040] mt-4">Loading user stories...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a855f7] dark:border-purple-400 mx-auto"></div>
+          <p className="text-[#404040] dark:text-gray-400 mt-4">Loading user stories...</p>
         </div>
       )}
 
       {/* Empty State */}
       {!isLoading && userStories.length === 0 && !error && (
-        <div className="text-center py-16 bg-white rounded-card shadow-soft border border-[#d9d9d9]">
-          <Sparkles className="w-12 h-12 text-[#404040] mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-[#0d0d0d] mb-2">No user stories yet</h3>
-          <p className="text-sm text-[#404040] mb-6 max-w-md mx-auto">
+        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-card shadow-soft border border-[#d9d9d9] dark:border-gray-700">
+          <Sparkles className="w-12 h-12 text-[#404040] dark:text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-[#0d0d0d] dark:text-white mb-2">No user stories yet</h3>
+          <p className="text-sm text-[#404040] dark:text-gray-400 mb-6 max-w-md mx-auto">
             Create user stories to define personas and link them to tickets across all your projects
           </p>
           {canEdit && (

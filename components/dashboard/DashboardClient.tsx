@@ -7,6 +7,7 @@ import { useUser } from '@auth0/nextjs-auth0/client'
 import { Plus, LogOut, ArrowLeft, FolderKanban, Users, Edit2, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { ROLES } from '@/lib/constants'
+import { useTheme } from '@/components/ThemeProvider'
 import CreateProjectModal from '../modals/CreateProjectModal'
 import ProjectDetailContent from '../project/ProjectDetailContent'
 import UserStoryForm from '../project/UserStoryForm'
@@ -69,7 +70,7 @@ function UserStoriesBentoGrid({
       <button
         key={userStory.id || userStory._id}
         onClick={() => onUserStoryClick(userStory)}
-        className={`${sizeClasses[size]} h-[32vw] bg-white rounded-[18px] shadow-soft overflow-hidden cursor-pointer hover:shadow-lg transition-all group block text-left`}
+        className={`${sizeClasses[size]} h-[32vw] bg-white dark:bg-gray-800 rounded-[18px] shadow-soft overflow-hidden cursor-pointer hover:shadow-lg transition-all group block text-left`}
       >
         <div className={`w-full h-full relative overflow-hidden rounded-[18px] ${
           !imageUrl ? `bg-gradient-to-br ${gradient}` : ''
@@ -201,7 +202,7 @@ function BentoGrid({
       <button
         key={project._id || project.id}
         onClick={() => onProjectClick(project._id || project.id)}
-        className={`${sizeClasses[size]} h-[32vw] bg-white rounded-[18px] shadow-soft overflow-hidden cursor-pointer hover:shadow-lg transition-all group block text-left`}
+        className={`${sizeClasses[size]} h-[32vw] bg-white dark:bg-gray-800 rounded-[18px] shadow-soft overflow-hidden cursor-pointer hover:shadow-lg transition-all group block text-left`}
       >
         <div className={`w-full h-full relative overflow-hidden rounded-[18px] ${
           !imageUrl ? `bg-gradient-to-br ${gradient}` : ''
@@ -315,7 +316,7 @@ function UserStoryDetailView({
 
   return (
     <div className="p-4 pt-2">
-      <div className="bg-white rounded-card shadow-soft overflow-hidden transition-all animate-fade-in">
+      <div className="bg-white dark:bg-gray-800 rounded-card shadow-soft overflow-hidden transition-all animate-fade-in">
         {/* User Story Header */}
         <div className={`h-64 relative overflow-hidden ${!imageUrl ? `bg-gradient-to-br ${gradient}` : ''}`}>
           {imageUrl && (
@@ -367,14 +368,14 @@ function UserStoryDetailView({
         <div className="p-4">
           <div className="space-y-4 mb-4">
             <div>
-              <p className="text-xs font-medium text-[#404040] uppercase tracking-wide mb-1">Goal</p>
-              <p className="text-[#0d0d0d] text-sm">
+              <p className="text-xs font-medium text-[#404040] dark:text-gray-400 uppercase tracking-wide mb-1">Goal</p>
+              <p className="text-[#0d0d0d] dark:text-white text-sm">
                 {userStory.goal || 'No goal specified.'}
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#404040] uppercase tracking-wide mb-1">Benefit</p>
-              <p className="text-[#0d0d0d] text-sm">
+              <p className="text-xs font-medium text-[#404040] dark:text-gray-400 uppercase tracking-wide mb-1">Benefit</p>
+              <p className="text-[#0d0d0d] dark:text-white text-sm">
                 {userStory.benefit || 'No benefit specified.'}
               </p>
             </div>
@@ -382,8 +383,8 @@ function UserStoryDetailView({
           
           {/* Demographics */}
           {userStory.demographics && Object.keys(userStory.demographics).length > 0 && (
-            <div className="pt-4 border-t border-[#d9d9d9]">
-              <p className="text-xs font-medium text-[#404040] uppercase tracking-wide mb-2">Demographics</p>
+            <div className="pt-4 border-t border-[#d9d9d9] dark:border-gray-700">
+              <p className="text-xs font-medium text-[#404040] dark:text-gray-400 uppercase tracking-wide mb-2">Demographics</p>
               <div className="flex flex-wrap gap-2">
                 {userStory.demographics.age && (
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -406,8 +407,8 @@ function UserStoryDetailView({
           
           {/* Created By */}
           {userStory.createdBy && (
-            <div className="pt-4 border-t border-[#d9d9d9] mt-4">
-              <p className="text-xs text-[#404040]">
+            <div className="pt-4 border-t border-[#d9d9d9] dark:border-gray-700 mt-4">
+              <p className="text-xs text-[#404040] dark:text-gray-400">
                 Created by {userStory.createdBy.name} • {new Date(userStory.createdAt).toLocaleDateString()}
               </p>
             </div>
@@ -427,6 +428,7 @@ export default function DashboardClient({
   const router = useRouter()
   const pathname = usePathname()
   const { user, isLoading } = useUser()
+  const { theme, toggleTheme } = useTheme()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isUserStoryModalOpen, setIsUserStoryModalOpen] = useState(false)
   const [projects, setProjects] = useState<ProjectResponse[]>(initialProjects || [])
@@ -468,10 +470,15 @@ export default function DashboardClient({
     isAssigning: isAssigningUserStory,
   } = useUserStories()
 
-  // Fetch user stories on mount
+  // Fetch user stories on mount only (use ref to prevent re-fetching on every render)
+  const hasFetchedUserStories = useRef(false)
   useEffect(() => {
-    fetchUserStories()
-  }, [fetchUserStories])
+    if (!hasFetchedUserStories.current) {
+      hasFetchedUserStories.current = true
+      fetchUserStories()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Empty dependency array - only run once on mount. fetchUserStories is stable after our hook fix.
 
   // Auto-select first user story when switching to User Stories tab and no story is selected
   useEffect(() => {
@@ -724,24 +731,26 @@ export default function DashboardClient({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5]">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5] dark:bg-gray-900">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5]">
+    <div className="min-h-screen bg-[#f5f5f5] dark:bg-gray-900">
       {/* Top Header */}
-      <header className="bg-[#f5f5f5] border-b border-[#d9d9d9] h-16 flex items-center px-6">
+      <header className="bg-[#f5f5f5] dark:bg-gray-900 border-b border-[#d9d9d9] dark:border-gray-700 h-16 flex items-center px-6">
         <div className="flex items-center gap-3 flex-1">
-          {/* Bee Logo - Rounded Container - Clickable */}
+          {/* Bee Logo - Rounded Container - Clickable (toggles theme) */}
           <button
-            onClick={() => {
-              setSelectedProjectId(null)
-              router.push('/dashboard')
+            onClick={(e) => {
+              // Toggle theme on click
+              e.preventDefault()
+              toggleTheme()
             }}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           >
             <div className="w-6 h-6 relative flex-shrink-0 rounded-md overflow-hidden">
               <Image
@@ -752,7 +761,7 @@ export default function DashboardClient({
                 sizes="24px"
               />
             </div>
-            <span className="text-[#0d0d0d] text-sm font-medium">ProductBee</span>
+            <span className="text-[#0d0d0d] dark:text-white text-sm font-medium">ProductBee</span>
           </button>
         </div>
         <div className="flex items-center gap-4">
@@ -761,19 +770,22 @@ export default function DashboardClient({
               {user.name || user.email}
             </div>
           )}
-          <a
-            href="/api/auth/logout"
-            className="flex items-center gap-2 px-4 py-2 bg-[#d9d9d9] text-[#0d0d0d] rounded-full text-sm font-medium hover:bg-[#c9c9c9] transition-colors"
+          <button
+            onClick={() => {
+              // Use window.location for immediate redirect to prevent multiple clicks
+              window.location.href = '/api/auth/logout'
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#d9d9d9] dark:bg-gray-700 text-[#0d0d0d] dark:text-white rounded-full text-sm font-medium hover:bg-[#c9c9c9] dark:hover:bg-gray-600 transition-colors"
           >
             <LogOut className="w-4 h-4" />
             Logout
-          </a>
+          </button>
         </div>
       </header>
 
       <div className="flex h-[calc(100vh-64px)]">
         {/* Left Sidebar */}
-        <aside className="w-96 bg-[#f2f2f2] border-r border-[#d9d9d9] flex flex-col overflow-y-auto">
+        <aside className="w-96 bg-[#f2f2f2] dark:bg-gray-800 border-r border-[#d9d9d9] dark:border-gray-700 flex flex-col overflow-y-auto">
           {/* Back Button - Show when project is selected and not on dashboard route */}
           {selectedProject && pathname !== '/dashboard' && activeTab === 'projects' && (
             <div className="p-4 pb-2">
@@ -782,7 +794,7 @@ export default function DashboardClient({
                   setSelectedProjectId(null)
                   router.push('/dashboard')
                 }}
-                className="flex items-center gap-2 px-4 py-2 text-[#404040] hover:text-[#0d0d0d] hover:bg-white rounded-full transition-colors w-full justify-start"
+                className="flex items-center gap-2 px-4 py-2 text-[#404040] dark:text-gray-300 hover:text-[#0d0d0d] dark:hover:text-white hover:bg-white dark:hover:bg-gray-700 rounded-full transition-colors w-full justify-start"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="text-sm font-medium">Back to Dashboard</span>
@@ -801,10 +813,10 @@ export default function DashboardClient({
             />
           ) : activeTab === 'user-stories' && userStories.length > 0 && !displayUserStory ? (
             <div className="p-4">
-              <div className="bg-white rounded-card shadow-soft p-6 text-center">
-                <Users className="w-12 h-12 text-[#404040] mx-auto mb-4 opacity-50" />
-                <p className="text-[#404040] text-sm mb-2">Select a user story</p>
-                <p className="text-xs text-[#404040] opacity-75">
+              <div className="bg-white dark:bg-gray-800 rounded-card shadow-soft p-6 text-center">
+                <Users className="w-12 h-12 text-[#404040] dark:text-gray-400 mx-auto mb-4 opacity-50" />
+                <p className="text-[#404040] dark:text-gray-300 text-sm mb-2">Select a user story</p>
+                <p className="text-xs text-[#404040] dark:text-gray-400 opacity-75">
                   Click on a user story from the grid to view details
                 </p>
               </div>
@@ -821,7 +833,7 @@ export default function DashboardClient({
             <>
               {/* Project Details Card */}
               <div className="p-4 pt-2">
-                <div className="bg-white rounded-card shadow-soft overflow-hidden transition-all animate-fade-in">
+                <div className="bg-white dark:bg-gray-800 rounded-card shadow-soft overflow-hidden transition-all animate-fade-in">
                   {/* Project Image/Background */}
                   {(() => {
                     const imageUrl = selectedProject.roadmap?.imageUrl
@@ -848,7 +860,7 @@ export default function DashboardClient({
                         
                         {/* Description */}
                         <div className="p-4">
-                          <p className="text-[#404040] text-sm mb-4 line-clamp-3">
+                          <p className="text-[#404040] dark:text-gray-300 text-sm mb-4 line-clamp-3">
                             {selectedProject.description || 'No description available.'}
                           </p>
                           
@@ -877,20 +889,20 @@ export default function DashboardClient({
               {/* Project Statistics - Show when project is selected */}
               {projectStats && (
                 <div className="px-4 pb-4 space-y-3">
-                  <div className="bg-white rounded-card shadow-soft p-4">
-                    <h3 className="text-sm font-semibold text-[#0d0d0d] mb-3">Project Statistics</h3>
+                  <div className="bg-white dark:bg-gray-800 rounded-card shadow-soft p-4">
+                    <h3 className="text-sm font-semibold text-[#0d0d0d] dark:text-white mb-3">Project Statistics</h3>
                     <div className="space-y-3">
                       {/* Total Tickets */}
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-[#404040]">Total Tickets</span>
-                        <span className="text-sm font-semibold text-[#0d0d0d]">
+                        <span className="text-sm text-[#404040] dark:text-gray-400">Total Tickets</span>
+                        <span className="text-sm font-semibold text-[#0d0d0d] dark:text-white">
                           {projectStats.totalTickets}
                         </span>
                       </div>
                       
                       {/* Tickets by Status */}
                       <div className="space-y-2">
-                        <div className="text-xs font-medium text-[#404040] uppercase tracking-wide">
+                        <div className="text-xs font-medium text-[#404040] dark:text-gray-400 uppercase tracking-wide">
                           By Status
                         </div>
                         {[
@@ -907,21 +919,21 @@ export default function DashboardClient({
                       </div>
                       
                       {/* Assignees */}
-                      <div className="pt-2 border-t border-[#d9d9d9]">
+                      <div className="pt-2 border-t border-[#d9d9d9] dark:border-gray-700">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-[#404040]">Assigned To</span>
-                          <span className="text-sm font-semibold text-[#0d0d0d]">
+                          <span className="text-sm text-[#404040] dark:text-gray-400">Assigned To</span>
+                          <span className="text-sm font-semibold text-[#0d0d0d] dark:text-white">
                             {projectStats.uniqueAssignees}
                           </span>
                         </div>
-                        <div className="text-xs text-[#404040] mt-1">
+                        <div className="text-xs text-[#404040] dark:text-gray-400 mt-1">
                           {projectStats.unassignedCount} unassigned
                         </div>
                       </div>
                       
                       {/* Priority Breakdown */}
-                      <div className="pt-2 border-t border-[#d9d9d9]">
-                        <div className="text-xs font-medium text-[#404040] uppercase tracking-wide mb-2">
+                      <div className="pt-2 border-t border-[#d9d9d9] dark:border-gray-700">
+                        <div className="text-xs font-medium text-[#404040] dark:text-gray-400 uppercase tracking-wide mb-2">
                           Priority
                         </div>
                         <div className="space-y-1">
@@ -932,7 +944,7 @@ export default function DashboardClient({
                           ].map(({ label, count, color }) => (
                             <div key={label} className="flex items-center justify-between">
                               <span className={`text-xs font-medium ${color}`}>{label}</span>
-                              <span className="text-xs text-[#0d0d0d]">{count}</span>
+                              <span className="text-xs text-[#0d0d0d] dark:text-white">{count}</span>
                             </div>
                           ))}
                         </div>
@@ -1040,14 +1052,14 @@ export default function DashboardClient({
           )}
 
           {/* Bottom Bar with ProductBee and Create Buttons */}
-          <div className="mt-auto p-4 border-t border-[#d9d9d9] bg-white">
+          <div className="mt-auto p-4 border-t border-[#d9d9d9] dark:border-gray-700 bg-white dark:bg-gray-800">
             <div className="flex items-center justify-between gap-2">
               <button
                 onClick={() => {
                   setSelectedProjectId(null)
                   router.push('/dashboard')
                 }}
-                className="text-[#a855f7] italic font-medium text-sm hover:underline"
+                className="text-[#a855f7] dark:text-purple-400 italic font-medium text-sm hover:underline"
               >
                 ProductBee
               </button>
@@ -1058,7 +1070,7 @@ export default function DashboardClient({
                       setEditingUserStory(null)
                       setIsUserStoryModalOpen(true)
                     }}
-                    className="flex items-center gap-1 px-3 py-2 bg-[#d9d9d9] text-[#0d0d0d] rounded-full text-sm font-medium hover:bg-[#c9c9c9] transition-colors"
+                    className="flex items-center gap-1 px-3 py-2 bg-[#d9d9d9] dark:bg-gray-700 text-[#0d0d0d] dark:text-white rounded-full text-sm font-medium hover:bg-[#c9c9c9] dark:hover:bg-gray-600 transition-colors"
                   >
                     <span className="text-lg">+</span>
                     User Story
@@ -1067,7 +1079,7 @@ export default function DashboardClient({
                 {canCreateProject && (
                   <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-1 px-3 py-2 bg-[#d9d9d9] text-[#0d0d0d] rounded-full text-sm font-medium hover:bg-[#c9c9c9] transition-colors"
+                    className="flex items-center gap-1 px-3 py-2 bg-[#d9d9d9] dark:bg-gray-700 text-[#0d0d0d] dark:text-white rounded-full text-sm font-medium hover:bg-[#c9c9c9] dark:hover:bg-gray-600 transition-colors"
                   >
                     <span className="text-lg">+</span>
                     Project
@@ -1079,9 +1091,9 @@ export default function DashboardClient({
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-hidden bg-white flex flex-col">
+        <main className="flex-1 overflow-hidden bg-white dark:bg-gray-900 flex flex-col">
           {/* Tab Navigation */}
-          <div className="border-b border-[#d9d9d9] bg-white flex-shrink-0">
+          <div className="border-b border-[#d9d9d9] dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0">
             <div className="flex items-center px-4">
               <button
                 onClick={() => {
@@ -1090,8 +1102,8 @@ export default function DashboardClient({
                 }}
                 className={`flex items-center gap-2 px-6 py-4 border-b-2 transition-colors font-medium text-sm ${
                   activeTab === 'projects'
-                    ? 'border-[#a855f7] text-[#a855f7]'
-                    : 'border-transparent text-[#404040] hover:text-[#0d0d0d]'
+                    ? 'border-[#a855f7] dark:border-purple-400 text-[#a855f7] dark:text-purple-400'
+                    : 'border-transparent text-[#404040] dark:text-gray-400 hover:text-[#0d0d0d] dark:hover:text-white'
                 }`}
               >
                 <FolderKanban className="w-4 h-4" />
@@ -1127,7 +1139,7 @@ export default function DashboardClient({
                 </div>
               ) : selectedProjectId && isLoadingProject ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-[#404040]">Loading project...</div>
+                  <div className="text-[#404040] dark:text-gray-400">Loading project...</div>
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto p-4">
@@ -1138,7 +1150,7 @@ export default function DashboardClient({
                   ) : (
                     <div className="flex items-center justify-center h-full min-h-[400px]">
                       <div className="text-center animate-fade-in">
-                        <p className="text-[#404040] text-lg mb-4">
+                        <p className="text-[#404040] dark:text-gray-400 text-lg mb-4">
                           {canCreateProject 
                             ? 'No projects yet. Create your first project to get started!'
                             : 'No projects available.'}
@@ -1163,17 +1175,17 @@ export default function DashboardClient({
             <div className="flex-1 overflow-y-auto p-4">
               {isLoadingUserStories && userStories.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a855f7] mx-auto mb-4"></div>
-                    <p className="text-[#404040]">Loading user stories...</p>
-                  </div>
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#a855f7] dark:border-purple-400 mx-auto mb-4"></div>
+                      <p className="text-[#404040] dark:text-gray-400">Loading user stories...</p>
+                    </div>
                 </div>
               ) : userStories.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center max-w-md">
-                    <Users className="w-12 h-12 text-[#404040] mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-[#0d0d0d] mb-2">No user stories yet</h3>
-                    <p className="text-sm text-[#404040] mb-6">
+                    <Users className="w-12 h-12 text-[#404040] dark:text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-[#0d0d0d] dark:text-white mb-2">No user stories yet</h3>
+                    <p className="text-sm text-[#404040] dark:text-gray-400 mb-6">
                       Create user stories to define personas and link them to tickets across all your projects
                     </p>
                     {canEditUserStories && (

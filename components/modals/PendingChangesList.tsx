@@ -66,16 +66,16 @@ export default function PendingChangesList({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-card shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 dark:bg-opacity-70">
+      <div className="bg-white dark:bg-gray-800 rounded-card shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#d9d9d9]">
-          <h2 className="text-xl font-semibold text-[#0d0d0d]">
+        <div className="flex items-center justify-between p-6 border-b border-[#d9d9d9] dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-[#0d0d0d] dark:text-white">
             Pending Status Changes
           </h2>
           <button
             onClick={onClose}
-            className="text-[#404040] hover:text-[#0d0d0d] transition-colors"
+            className="text-[#404040] dark:text-gray-300 hover:text-[#0d0d0d] dark:hover:text-white transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -84,7 +84,7 @@ export default function PendingChangesList({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {pendingChanges.length === 0 ? (
-            <div className="text-center py-8 text-[#404040]">
+            <div className="text-center py-8 text-[#404040] dark:text-gray-400">
               <p>No pending status changes</p>
             </div>
           ) : (
@@ -99,14 +99,14 @@ export default function PendingChangesList({
                 return (
                   <div
                     key={changeId}
-                    className="border border-[#d9d9d9] rounded-card-inner p-4 bg-[#f5f5f5]"
+                    className="border border-[#d9d9d9] dark:border-gray-700 rounded-card-inner p-4 bg-[#f5f5f5] dark:bg-gray-900"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
-                        <h3 className="font-medium text-[#0d0d0d] mb-1">
+                        <h3 className="font-medium text-[#0d0d0d] dark:text-white mb-1">
                           {featureTitle}
                         </h3>
-                        <p className="text-sm text-[#404040]">
+                        <p className="text-sm text-[#404040] dark:text-gray-300">
                           <span className="font-medium">{change.proposedBy.name}</span> wants to move
                           from{' '}
                           <span className="font-medium">
@@ -117,7 +117,7 @@ export default function PendingChangesList({
                             {statusLabels[change.toStatus] || change.toStatus}
                           </span>
                         </p>
-                        <p className="text-xs text-[#404040] mt-1">
+                        <p className="text-xs text-[#404040] dark:text-gray-400 mt-1">
                           {new Date(change.createdAt).toLocaleString()}
                         </p>
                       </div>
@@ -135,7 +135,7 @@ export default function PendingChangesList({
                             }))
                           }
                           placeholder="Optional: Provide a reason for rejection..."
-                          className="w-full px-3 py-2 text-sm border border-[#d9d9d9] rounded-card-inner bg-white text-[#0d0d0d] placeholder-[#404040] focus:outline-none focus:ring-2 focus:ring-[#a855f7]"
+                          className="w-full px-3 py-2 text-sm border border-[#d9d9d9] dark:border-gray-600 rounded-card-inner bg-white dark:bg-gray-700 text-[#0d0d0d] dark:text-white placeholder-[#404040] dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#a855f7]"
                           rows={2}
                         />
                       </div>

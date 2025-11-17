@@ -40,6 +40,12 @@ export function extractAccountIdFromSession(session: any): string {
  * Get user from session (Auth0)
  * Returns user from database or throws error
  * Extracts accountId from Auth0 metadata and ensures user has accountId
+ * 
+ * Handles Auth0 account linking:
+ * - When user signs in with different provider (e.g., email/password vs Google) using same email
+ * - If auth0_id lookup fails, checks for existing user by email
+ * - Updates existing user's auth0_id to link accounts (Auth0 handles the linking)
+ * - Prevents duplicate accounts and authentication loops
  */
 export async function getUserFromSession(session: any): Promise<User> {
   if (!session || !session.user) {
@@ -57,23 +63,121 @@ export async function getUserFromSession(session: any): Promise<User> {
     .single()
 
   if (userError && userError.code === 'PGRST116') {
-    // User doesn't exist, create it with accountId
-    const { data: newUser, error: createError } = await supabase
-      .from('users')
-      .insert({
-        auth0_id: session.user.sub,
-        name: session.user.name || session.user.email || 'Unknown',
-        email: session.user.email || '',
-        role: 'viewer',
-        account_id: accountId,
-      })
-      .select()
-      .single()
+    // User doesn't exist with this auth0_id, check if user exists by email (account linking)
+    if (session.user.email) {
+      const { data: existingUser, error: emailError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', session.user.email)
+        .single()
 
-    if (createError) {
-      throw APIErrors.internalError('Failed to create user')
+      if (existingUser && !emailError) {
+        // Found user with same email but different auth0_id - account linking scenario
+        // Update the user's auth0_id to the new one (Auth0 handles the linking)
+        console.log('[Account Linking] Found existing user by email, updating auth0_id', {
+          email: session.user.email,
+          oldAuth0Id: existingUser.auth0_id,
+          newAuth0Id: session.user.sub,
+        })
+
+        const { data: updatedUser, error: updateError } = await supabase
+          .from('users')
+          .update({ auth0_id: session.user.sub })
+          .eq('id', existingUser.id)
+          .select()
+          .single()
+
+        if (!updateError && updatedUser) {
+          user = updatedUser
+        } else {
+          // Account linking conflict - log for debugging
+          console.error('[Account Linking] Failed to update auth0_id', {
+            email: session.user.email,
+            userId: existingUser.id,
+            error: updateError,
+          })
+          throw APIErrors.internalError('Account linking conflict. Please contact support.')
+        }
+      } else {
+        // No existing user, create new one
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert({
+            auth0_id: session.user.sub,
+            name: session.user.name || session.user.email || 'Unknown',
+            email: session.user.email || '',
+            role: 'viewer',
+            account_id: accountId,
+          })
+          .select()
+          .single()
+
+        if (createError) {
+          // Check if it's a unique constraint violation on email (account linking scenario)
+          if (createError.code === '23505' && session.user.email) {
+            // Email already exists, try to update existing user's auth0_id
+            console.log('[Account Linking] Email unique violation, attempting account linking', {
+              email: session.user.email,
+              newAuth0Id: session.user.sub,
+            })
+
+            const { data: existingUserByEmail, error: emailLookupError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('email', session.user.email)
+              .single()
+
+            if (existingUserByEmail && !emailLookupError) {
+              // Update existing user's auth0_id
+              const { data: linkedUser, error: linkError } = await supabase
+                .from('users')
+                .update({ auth0_id: session.user.sub })
+                .eq('id', existingUserByEmail.id)
+                .select()
+                .single()
+
+              if (!linkError && linkedUser) {
+                user = linkedUser
+              } else {
+                console.error('[Account Linking] Failed to link account', {
+                  email: session.user.email,
+                  error: linkError,
+                })
+                throw APIErrors.badRequest('Account linking failed. Please contact support.')
+              }
+            } else {
+              console.error('[Account Linking] Email exists but lookup failed', {
+                email: session.user.email,
+                error: emailLookupError,
+              })
+              throw APIErrors.internalError('Failed to create user')
+            }
+          } else {
+            throw APIErrors.internalError('Failed to create user')
+          }
+        } else {
+          user = newUser
+        }
+      }
+    } else {
+      // No email available, create new user
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert({
+          auth0_id: session.user.sub,
+          name: session.user.name || 'Unknown',
+          email: '',
+          role: 'viewer',
+          account_id: accountId,
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        throw APIErrors.internalError('Failed to create user')
+      }
+      user = newUser
     }
-    user = newUser
   } else if (userError) {
     throw APIErrors.internalError('Failed to fetch user')
   }
@@ -83,6 +187,7 @@ export async function getUserFromSession(session: any): Promise<User> {
   }
 
   // Update user's account_id if it's missing or different (migration support)
+  // Preserve existing account_id during account linking
   if (!user.account_id || user.account_id !== accountId) {
     const { data: updatedUser, error: updateError } = await supabase
       .from('users')

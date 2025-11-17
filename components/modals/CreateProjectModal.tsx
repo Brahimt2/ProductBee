@@ -92,15 +92,15 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-card shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-[#d9d9d9] px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-[#0d0d0d]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 dark:bg-opacity-70">
+      <div className="bg-white dark:bg-gray-800 rounded-card shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-[#d9d9d9] dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-[#0d0d0d] dark:text-white">
             Create New Project
           </h2>
           <button
             onClick={onClose}
-            className="text-[#404040] hover:text-[#0d0d0d] transition-colors"
+            className="text-[#404040] dark:text-gray-300 hover:text-[#0d0d0d] dark:hover:text-white transition-colors"
             disabled={isLoading}
           >
             <X className="w-6 h-6" />
@@ -111,7 +111,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
           <div>
             <label
               htmlFor="projectName"
-              className="block text-sm font-medium text-[#404040] mb-2"
+              className="block text-sm font-medium text-[#404040] dark:text-gray-300 mb-2"
             >
               Project Name <span className="text-red-500">*</span>
             </label>
@@ -120,7 +120,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              className="w-full px-4 py-2 border border-[#d9d9d9] rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white text-[#0d0d0d]"
+              className="w-full px-4 py-2 border border-[#d9d9d9] dark:border-gray-600 rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white dark:bg-gray-700 text-[#0d0d0d] dark:text-white"
               placeholder="Enter project name"
               required
               disabled={isLoading}
@@ -130,7 +130,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
           <div>
             <label
               htmlFor="projectDescription"
-              className="block text-sm font-medium text-[#404040] mb-2"
+              className="block text-sm font-medium text-[#404040] dark:text-gray-300 mb-2"
             >
               Project Description <span className="text-red-500">*</span>
             </label>
@@ -139,7 +139,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
               value={projectDescription}
               onChange={(e) => setProjectDescription(e.target.value)}
               rows={6}
-              className="w-full px-4 py-2 border border-[#d9d9d9] rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white text-[#0d0d0d]"
+              className="w-full px-4 py-2 border border-[#d9d9d9] dark:border-gray-600 rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white dark:bg-gray-700 text-[#0d0d0d] dark:text-white"
               placeholder="Describe your project in detail..."
               required
               disabled={isLoading}
@@ -151,7 +151,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
             <div>
               <label
                 htmlFor="priority"
-                className="block text-sm font-medium text-[#404040] mb-2"
+                className="block text-sm font-medium text-[#404040] dark:text-gray-300 mb-2"
               >
                 Default Priority
               </label>
@@ -159,7 +159,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
                 id="priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as typeof priority)}
-                className="w-full px-4 py-2 border border-[#d9d9d9] rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white text-[#0d0d0d]"
+                className="w-full px-4 py-2 border border-[#d9d9d9] dark:border-gray-600 rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white dark:bg-gray-700 text-[#0d0d0d] dark:text-white"
                 disabled={isLoading}
               >
                 {Object.entries(PRIORITY_LEVELS).map(([key, value]) => (
@@ -173,7 +173,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
             <div>
               <label
                 htmlFor="estimatedEffort"
-                className="block text-sm font-medium text-[#404040] mb-2"
+                className="block text-sm font-medium text-[#404040] dark:text-gray-300 mb-2"
               >
                 Estimated Effort (Weeks)
               </label>
@@ -184,7 +184,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
                 step="1"
                 value={estimatedEffort}
                 onChange={(e) => setEstimatedEffort(parseInt(e.target.value) || 4)}
-                className="w-full px-4 py-2 border border-[#d9d9d9] rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white text-[#0d0d0d]"
+                className="w-full px-4 py-2 border border-[#d9d9d9] dark:border-gray-600 rounded-card-inner focus:ring-2 focus:ring-[#a855f7] focus:border-transparent bg-white dark:bg-gray-700 text-[#0d0d0d] dark:text-white"
                 disabled={isLoading}
               />
             </div>
@@ -194,7 +194,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
           <div>
             <label
               htmlFor="labels"
-              className="block text-sm font-medium text-[#404040] mb-2"
+              className="block text-sm font-medium text-[#404040] dark:text-gray-300 mb-2"
             >
               Project Tags
             </label>
@@ -225,7 +225,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
                     setNewLabel('')
                   }
                 }}
-                className="px-4 py-2 bg-[#d9d9d9] text-[#0d0d0d] rounded-full hover:bg-[#c9c9c9] transition-colors"
+                className="px-4 py-2 bg-[#d9d9d9] dark:bg-gray-700 text-[#0d0d0d] dark:text-white rounded-full hover:bg-[#c9c9c9] dark:hover:bg-gray-600 transition-colors"
                 disabled={isLoading}
               >
                 Add
@@ -254,11 +254,11 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end gap-4 pt-4 border-t border-[#d9d9d9]">
+          <div className="flex items-center justify-end gap-4 pt-4 border-t border-[#d9d9d9] dark:border-gray-700">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-[#404040] hover:bg-[#f5f5f5] rounded-full transition-colors"
+              className="px-4 py-2 text-[#404040] dark:text-gray-300 hover:bg-[#f5f5f5] dark:hover:bg-gray-700 rounded-full transition-colors"
               disabled={isLoading}
             >
               Cancel

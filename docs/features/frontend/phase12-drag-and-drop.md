@@ -401,3 +401,4 @@ useEffect(() => {
 - Animation improvements (smooth card transitions)
 - Real-time subscriptions for pending changes (Supabase Realtime)
 
+

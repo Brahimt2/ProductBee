@@ -109,7 +109,19 @@ interface BaseModel {
 - `content`, `proposed_roadmap?`, `ai_analysis?`
 - `status` (`pending|approved|rejected`)
 
-> **Agent Note:** Understand relationships: Project → Feature → Feedback. Always use conversion functions when reading/writing to database. See Constants section for format mappings.
+**UserStory** (`/models/UserStory.ts`):
+- `project_id?` (optional - user stories are global, account-scoped)
+- `account_id`, `name`, `role`, `goal`, `benefit`
+- `demographics?` (JSONB object)
+- `created_by`, `created_at`, `updated_at`
+
+**PendingChange** (`/models/PendingChange.ts`):
+- `feature_id`, `proposed_by`, `account_id`
+- `from_status`, `to_status`
+- `status` (`pending|approved|rejected`)
+- `rejection_reason?`
+
+> **Agent Note:** Understand relationships: Project → Feature → Feedback. User stories are global (account-scoped) and can optionally be associated with a project. Always use conversion functions when reading/writing to database. See Constants section for format mappings.
 
 ---
 
@@ -506,6 +518,7 @@ export const config = {
     '/api/roadmap/:path*',
     '/api/feedback/:path*',
     '/api/feature/:path*',
+    '/api/user-story/:path*',
   ],
 }
 ```
@@ -513,12 +526,26 @@ export const config = {
 **Protected Routes:**
 - All `/dashboard/**` pages
 - All `/project/**` pages
-- All API routes (except `/api/auth/**`)
+- All API routes (except `/api/auth/**`):
+  - `/api/projects/**`
+  - `/api/project/**`
+  - `/api/roadmap/**`
+  - `/api/feedback/**`
+  - `/api/feature/**`
+  - `/api/user-story/**`
+  - `/api/user/**`
+  - `/api/team/**`
 
 **Unprotected Routes:**
 - `/` (home page)
 - `/api/auth/**` (Auth0 callback/logout)
 - `/onboarding` (accessible to authenticated users)
+
+**Middleware Protection Strategy:**
+- All API routes requiring authentication are protected via middleware matcher
+- Auth0 session is validated before route handlers execute
+- Unauthenticated requests are automatically redirected to login
+- Account isolation and role-based permissions are enforced in API route handlers
 
 ### Session Management
 
@@ -527,15 +554,54 @@ Sessions are managed by Auth0 SDK:
 - Automatically refreshed
 - Accessible via `getSession()` in API routes and server components
 
+### Error Handling
+
+Auth0 errors are handled elegantly:
+- **Automatic Error Handling:** The Auth0 SDK automatically catches and handles authentication errors
+- **Error Redirects:** Errors redirect to `/api/auth/error` with error details
+- **Common Errors:**
+  - `access_denied` - User denied authorization
+  - `login_required` - User needs to log in
+  - `invalid_request` - Invalid request parameters
+- **Server-side Logging:** All errors are logged server-side for debugging
+- **User-friendly Messages:** Users see appropriate error messages via the error page
+
+**Implementation:** See `/app/api/auth/[...auth0]/route.ts` for error handling configuration.
+
 ### User Creation Flow
 
 1. User authenticates via Auth0
-2. `getUserFromSession()` checks if user exists in database
-3. If not exists, creates user with:
+2. `getUserFromSession()` checks if user exists in database by `auth0_id`
+3. **Account Linking:** If user doesn't exist by `auth0_id`:
+   - Checks if user exists by email (account linking scenario)
+   - If found, updates existing user's `auth0_id` to link accounts
+   - Preserves all user data (role, account_id, etc.) - only updates `auth0_id`
+   - Handles unique constraint violations on email during user creation
+4. If user doesn't exist, creates new user with:
    - `auth0_id` from session
    - `account_id` from Auth0 metadata (or generated fallback)
    - Default role: `viewer`
-4. User redirected to onboarding if role is `viewer` or engineer without specialization
+5. User redirected to onboarding if role is `viewer` or engineer without specialization
+
+### Account Linking Configuration
+
+**Auth0 Setup:**
+- Enable "Auto-link accounts with same email address" in Auth0 Dashboard
+- This allows users to sign in with different providers (email/password, Google, etc.) using the same email
+- Auth0 automatically links accounts at the Auth0 level
+
+**Database Handling:**
+- The `getUserFromSession()` function in `/lib/api/permissions.ts` handles account linking in the database
+- When a user signs in with a different provider but same email:
+  1. Lookup by `auth0_id` fails (user doesn't exist with new `auth0_id`)
+  2. Fallback lookup by email finds existing user
+  3. Updates existing user's `auth0_id` to the new one
+  4. All user data is preserved (role, account_id, projects, etc.)
+
+**Error Handling:**
+- Account linking conflicts are logged with detailed information
+- Users see: "Account linking conflict. Please contact support." if linking fails
+- Unique constraint violations on email are handled gracefully
 
 ## 🔟 Real-time Setup
 
@@ -543,13 +609,22 @@ Sessions are managed by Auth0 SDK:
 
 **Required Setup:**
 1. Enable Realtime in Supabase Dashboard: Database → Replication
-2. Enable for tables: `projects`, `features`, `feedback`
+2. Enable for tables: `projects`, `features`, `feedback` (currently used in frontend)
 3. Run SQL to add tables to publication:
 
 ```sql
 ALTER PUBLICATION supabase_realtime ADD TABLE projects;
 ALTER PUBLICATION supabase_realtime ADD TABLE features;
 ALTER PUBLICATION supabase_realtime ADD TABLE feedback;
+```
+
+**Note:** The schema.sql also enables real-time for `pending_changes`, `user_stories`, and `ticket_user_story`, but these are not currently used in frontend subscriptions. You can remove them from the publication if not needed:
+
+```sql
+-- Optional: Remove unused real-time tables
+ALTER PUBLICATION supabase_realtime DROP TABLE pending_changes;
+ALTER PUBLICATION supabase_realtime DROP TABLE user_stories;
+ALTER PUBLICATION supabase_realtime DROP TABLE ticket_user_story;
 ```
 
 **Important:** If you run a fresh `schema.sql`, these ALTER statements are included. If you're updating an existing database, you must run these statements manually.
@@ -644,7 +719,82 @@ if (body.priority) {
 }
 ```
 
-## 1️⃣3️⃣ Troubleshooting
+## 1️⃣3️⃣ Vercel Deployment
+
+### Environment Variables Setup
+
+**In Vercel Dashboard:**
+1. Go to your project settings → Environment Variables
+2. Add all required environment variables (see `/ENV_TEMPLATE.md`)
+3. Set environment-specific values:
+   - **Production:** Use your production domain (e.g., `https://your-app.vercel.app`)
+   - **Preview:** Vercel automatically provides preview URLs
+   - **Development:** Use `http://localhost:3000`
+
+**Required Variables for Vercel:**
+```env
+AUTH0_SECRET=<generate with: openssl rand -hex 32>
+AUTH0_BASE_URL=https://your-app.vercel.app
+AUTH0_ISSUER_BASE_URL=https://your-tenant.auth0.com
+AUTH0_CLIENT_ID=your-auth0-client-id
+AUTH0_CLIENT_SECRET=your-auth0-client-secret
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+### Auth0 Production Configuration
+
+**Update Auth0 Application Settings:**
+1. Go to Auth0 Dashboard → Applications → Your App
+2. Update **Allowed Callback URLs:**
+   ```
+   https://your-app.vercel.app/api/auth/callback, http://localhost:3000/api/auth/callback
+   ```
+3. Update **Allowed Logout URLs:**
+   ```
+   https://your-app.vercel.app, http://localhost:3000
+   ```
+4. Update **Allowed Web Origins:**
+   ```
+   https://your-app.vercel.app
+   ```
+
+**Important:** After deploying to Vercel, update `AUTH0_BASE_URL` in Vercel environment variables to match your production URL.
+
+### Next.js Configuration for Vercel
+
+The current `next.config.js` is optimized for Vercel:
+- React Strict Mode enabled
+- Image optimization configured
+- No additional configuration needed
+
+Vercel automatically:
+- Detects Next.js projects
+- Runs `npm run build` on deployment
+- Handles serverless function routing
+- Provides edge middleware support
+
+### Deployment Checklist
+
+- [ ] All environment variables set in Vercel dashboard
+- [ ] Auth0 callback/logout URLs updated for production domain
+- [ ] `AUTH0_BASE_URL` matches production domain
+- [ ] Supabase project is active and accessible
+- [ ] Database schema is deployed
+- [ ] Real-time is enabled for required tables
+- [ ] Test authentication flow in production
+- [ ] Verify API routes are accessible
+
+### Error Handling in Production
+
+Auth0 errors are handled automatically:
+- Authentication errors redirect to `/api/auth/error`
+- Errors are logged server-side for debugging
+- Users see user-friendly error messages
+- No custom error pages required (handled by Auth0 SDK)
+
+## 1️⃣4️⃣ Troubleshooting
 
 ### Common Issues
 
@@ -677,6 +827,13 @@ if (body.priority) {
 - Ensure you're using correct type layer (Database vs Model vs API)
 - Check that conversion functions match expected types
 - Verify constants match between frontend and backend
+
+**7. Row Level Security (RLS)**
+- RLS is intentionally disabled - authorization is handled in API layer
+- This is the recommended approach when using Auth0 with Supabase
+- All queries must filter by `account_id` to enforce account isolation
+- Permission checks are handled in Next.js API routes, not at database level
+- If you see RLS-related errors, ensure RLS is disabled in schema.sql
 
 ### Debugging Tips
 
