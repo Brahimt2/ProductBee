@@ -1,67 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
-import dbConnect from '@/lib/db'
-import Feedback from '@/models/Feedback'
-import User from '@/models/User'
-import Feature from '@/models/Feature'
-import Project from '@/models/Project'
+import { createServerClient } from '@/lib/supabase'
 import { compareRoadmaps } from '@/lib/gemini'
-import mongoose from 'mongoose'
+import { getUserFromSession, requireProposalApproval } from '@/lib/api/permissions'
+import { validateUUID, validateJsonBody, validateRequired, feedbackTypeToApi } from '@/lib/api/validation'
+import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
+import type { ApproveFeedbackRequest, ApproveFeedbackResponse } from '@/types/api'
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await getUserFromSession(session)
 
-    await dbConnect()
+    const body = await validateJsonBody<ApproveFeedbackRequest>(request)
+    validateRequired(body, ['feedbackId'])
+    validateUUID(body.feedbackId, 'Feedback ID')
 
-    const { feedbackId } = await request.json()
+    const { feedbackId } = body
+    const supabase = createServerClient()
 
-    if (!feedbackId || !mongoose.Types.ObjectId.isValid(feedbackId)) {
-      return NextResponse.json({ error: 'Invalid feedback ID' }, { status: 400 })
-    }
+    // Get feedback - filtered by account_id for account isolation
+    const { data: feedback, error: feedbackError } = await supabase
+      .from('feedback')
+      .select('*')
+      .eq('id', feedbackId)
+      .eq('account_id', user.account_id)
+      .single()
 
-    // Get user and check if they're a PM
-    const user = await User.findOne({ auth0Id: session.user.sub })
-    if (!user || (user.role !== 'pm' && user.role !== 'admin')) {
-      return NextResponse.json(
-        { error: 'Only PMs and admins can approve proposals' },
-        { status: 403 }
-      )
-    }
-
-    const feedback = await Feedback.findById(feedbackId)
-    if (!feedback) {
-      return NextResponse.json({ error: 'Feedback not found' }, { status: 404 })
+    if (feedbackError || !feedback) {
+      throw APIErrors.notFound('Feedback')
     }
 
     if (feedback.type !== 'proposal') {
-      return NextResponse.json(
-        { error: 'Can only approve proposals' },
-        { status: 400 }
-      )
+      throw APIErrors.badRequest('Can only approve proposals')
     }
 
     if (feedback.status !== 'pending') {
-      return NextResponse.json(
-        { error: 'Feedback already processed' },
-        { status: 400 }
-      )
+      throw APIErrors.badRequest('Feedback already processed')
     }
 
-    const project = await Project.findById(feedback.projectId)
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    // Check permission to approve proposals (PM/Admin + account isolation)
+    await requireProposalApproval(user, feedback.project_id)
+
+    // Get project - filtered by account_id for account isolation
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', feedback.project_id)
+      .eq('account_id', user.account_id)
+      .single()
+
+    if (projectError || !project) {
+      throw APIErrors.notFound('Project')
     }
 
     // If there's a proposed roadmap, compare and update
-    if (feedback.proposedRoadmap) {
+    if (feedback.proposed_roadmap) {
       try {
         const changes = await compareRoadmaps(
           { summary: project.roadmap.summary, features: [] },
-          feedback.proposedRoadmap
+          feedback.proposed_roadmap
         )
         
         // Update project roadmap if needed
@@ -71,26 +69,58 @@ export async function POST(request: NextRequest) {
         }
       } catch (error) {
         console.error('Error comparing roadmaps:', error)
+        // Continue with approval even if comparison fails
       }
     }
 
-    // Update feedback status
-    feedback.status = 'approved'
-    await feedback.save()
+    // Update feedback status - filtered by account_id for account isolation
+    const { data: updatedFeedback, error: updateError } = await supabase
+      .from('feedback')
+      .update({ status: 'approved' })
+      .eq('id', feedbackId)
+      .eq('account_id', user.account_id)
+      .select()
+      .single()
 
-    // Update related feature if needed (e.g., status, timeline)
-    // This would depend on the proposal content
+    if (updateError) {
+      throw APIErrors.internalError('Failed to update feedback')
+    }
 
-    return NextResponse.json({ 
+    // Fetch user data for the feedback creator
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('id', updatedFeedback.user_id)
+      .eq('account_id', user.account_id)
+      .single()
+
+    // Format response (convert DB format to API format)
+    const formattedFeedback = {
+      _id: updatedFeedback.id,
+      id: updatedFeedback.id,
+      projectId: updatedFeedback.project_id,
+      featureId: updatedFeedback.feature_id,
+      userId: userData && !userError ? {
+        _id: userData.id,
+        name: userData.name,
+        email: userData.email,
+      } : null,
+      type: feedbackTypeToApi(updatedFeedback.type), // Convert DB -> API
+      content: updatedFeedback.content,
+      proposedRoadmap: updatedFeedback.proposed_roadmap,
+      aiAnalysis: updatedFeedback.ai_analysis,
+      status: updatedFeedback.status,
+      createdAt: updatedFeedback.created_at,
+    }
+
+    const response: ApproveFeedbackResponse = {
       message: 'Proposal approved',
-      feedback 
-    })
-  } catch (error: any) {
-    console.error('Error approving feedback:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to approve feedback' },
-      { status: 500 }
-    )
+      feedback: formattedFeedback,
+    }
+
+    return successResponse(response)
+  } catch (error) {
+    return handleError(error)
   }
 }
 

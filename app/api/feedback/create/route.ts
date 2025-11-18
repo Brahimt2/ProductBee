@@ -1,58 +1,63 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
-import dbConnect from '@/lib/db'
-import Feedback from '@/models/Feedback'
-import User from '@/models/User'
-import Project from '@/models/Project'
-import Feature from '@/models/Feature'
+import { createServerClient } from '@/lib/supabase'
 import { analyzeProposal } from '@/lib/gemini'
-import mongoose from 'mongoose'
+import { getUserFromSession, requireProjectAccess } from '@/lib/api/permissions'
+import { validateUUID, validateRequired, validateJsonBody, validateFeedbackType, feedbackTypeToDb, feedbackTypeToApi } from '@/lib/api/validation'
+import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
+import { HTTP_STATUS } from '@/lib/constants'
+import type { CreateFeedbackRequest, CreateFeedbackResponse } from '@/types/api'
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getUserFromSession(session)
+
+    const body = await validateJsonBody<CreateFeedbackRequest>(request)
+    validateRequired(body, ['projectId', 'featureId', 'type', 'content'])
+    validateUUID(body.projectId, 'Project ID')
+    validateUUID(body.featureId, 'Feature ID')
+    validateFeedbackType(body.type) // Validate API format
+
+    const { projectId, featureId, content, proposedRoadmap } = body
+    const dbType = feedbackTypeToDb(body.type) // Convert API -> DB
+    const supabase = createServerClient()
+
+    // Check project access
+    await requireProjectAccess(user, projectId)
+
+    // Verify project and feature exist - filtered by account_id for account isolation
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .eq('account_id', user.account_id)
+      .single()
+
+    const { data: feature, error: featureError } = await supabase
+      .from('features')
+      .select('*')
+      .eq('id', featureId)
+      .eq('account_id', user.account_id)
+      .single()
+
+    if (projectError || !project) {
+      throw APIErrors.notFound('Project')
     }
 
-    await dbConnect()
-
-    const { projectId, featureId, type, content, proposedRoadmap } = await request.json()
-
-    if (!projectId || !featureId || !type || !content) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+    if (featureError || !feature) {
+      throw APIErrors.notFound('Feature')
     }
 
-    if (!mongoose.Types.ObjectId.isValid(projectId) || !mongoose.Types.ObjectId.isValid(featureId)) {
-      return NextResponse.json({ error: 'Invalid IDs' }, { status: 400 })
-    }
-
-    // Verify project and feature exist
-    const project = await Project.findById(projectId)
-    const feature = await Feature.findById(featureId)
-    
-    if (!project || !feature) {
-      return NextResponse.json({ error: 'Project or feature not found' }, { status: 404 })
-    }
-
-    // Get or create user
-    let user = await User.findOne({ auth0Id: session.user.sub })
-    if (!user) {
-      user = await User.create({
-        auth0Id: session.user.sub,
-        name: session.user.name || session.user.email || 'Unknown',
-        email: session.user.email || '',
-        role: 'engineer',
-      })
+    // Verify feature belongs to project
+    if (feature.project_id !== projectId) {
+      throw APIErrors.badRequest('Feature does not belong to this project')
     }
 
     let aiAnalysis = undefined
 
-    // If it's a proposal, analyze it with AI
-    if (type === 'proposal') {
+    // If it's a proposal, analyze it with AI (check DB format)
+    if (dbType === 'proposal') {
       try {
         const analysis = await analyzeProposal(content, project.roadmap)
         aiAnalysis = JSON.stringify(analysis)
@@ -62,27 +67,66 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const feedback = await Feedback.create({
-      projectId,
-      featureId,
-      userId: user._id,
-      type,
-      content,
-      proposedRoadmap: proposedRoadmap || undefined,
-      aiAnalysis,
-      status: 'pending',
-    })
+    // Create feedback with account_id for account isolation (using DB format)
+    const { data: feedback, error: feedbackError } = await supabase
+      .from('feedback')
+      .insert({
+        project_id: projectId,
+        feature_id: featureId,
+        user_id: user.id,
+        account_id: user.account_id,
+        type: dbType, // Use DB format
+        content,
+        proposed_roadmap: proposedRoadmap || null,
+        ai_analysis: aiAnalysis || null,
+        status: 'pending',
+      })
+      .select()
+      .single()
 
-    const populatedFeedback = await Feedback.findById(feedback._id)
-      .populate('userId', 'name email')
+    if (feedbackError || !feedback) {
+      throw APIErrors.internalError('Failed to create feedback')
+    }
 
-    return NextResponse.json({ feedback: populatedFeedback })
-  } catch (error: any) {
-    console.error('Error creating feedback:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to create feedback' },
-      { status: 500 }
-    )
+    // Fetch user data separately to ensure we get it correctly
+    // This is more reliable than relying on the foreign key join
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('id', user.id)
+      .eq('account_id', user.account_id)
+      .single()
+
+    // Format response (convert DB format to API format)
+    const formattedFeedback = {
+      _id: feedback.id,
+      id: feedback.id,
+      projectId: feedback.project_id,
+      featureId: feedback.feature_id,
+      userId: userData && !userError ? {
+        _id: userData.id,
+        name: userData.name,
+        email: userData.email,
+      } : {
+        _id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+      type: feedbackTypeToApi(feedback.type), // Convert DB -> API
+      content: feedback.content,
+      proposedRoadmap: feedback.proposed_roadmap,
+      aiAnalysis: feedback.ai_analysis,
+      status: feedback.status,
+      createdAt: feedback.created_at,
+    }
+
+    const response: CreateFeedbackResponse = {
+      feedback: formattedFeedback,
+    }
+
+    return successResponse(response, HTTP_STATUS.CREATED)
+  } catch (error) {
+    return handleError(error)
   }
 }
 

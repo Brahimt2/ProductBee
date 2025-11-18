@@ -16,7 +16,7 @@ An AI-powered roadmap dashboard that accelerates product development, optimizes 
 
 - **Frontend:** Next.js 14 (App Router), React Server Components, Tailwind CSS
 - **Auth:** Auth0
-- **Database:** MongoDB + Mongoose
+- **Database:** Supabase (PostgreSQL) with Real-time subscriptions
 - **AI:** Google Gemini API
 - **UI:** React Hot Toast, Lucide Icons
 
@@ -25,7 +25,7 @@ An AI-powered roadmap dashboard that accelerates product development, optimizes 
 ### Prerequisites
 
 - Node.js 18+ 
-- MongoDB instance (local or cloud)
+- Supabase account (free tier available)
 - Auth0 account
 - Google Gemini API key
 
@@ -54,8 +54,9 @@ AUTH0_ISSUER_BASE_URL=https://your-tenant.auth0.com
 AUTH0_CLIENT_ID=your-auth0-client-id
 AUTH0_CLIENT_SECRET=your-auth0-client-secret
 
-# MongoDB Connection
-MONGODB_URI=mongodb://localhost:27017/productbee
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 # Google Gemini API
 GEMINI_API_KEY=your-gemini-api-key-here
@@ -68,13 +69,22 @@ GEMINI_API_KEY=your-gemini-api-key-here
 - Set the logout URL to: `http://localhost:3000`
 - Copy your credentials to `.env.local`
 
-5. Run the development server:
+5. Set up Supabase:
+
+- Create a Supabase account at https://supabase.com
+- Create a new project
+- Go to Project Settings > API and copy your Project URL and anon key
+- Run the SQL schema from `supabase/schema.sql` in the Supabase SQL Editor
+- **If you have an existing database**, run the migration from `supabase/migration_add_account_id.sql` to add account isolation support
+- Enable Realtime in Database > Replication for tables: projects, features, feedback
+
+6. Run the development server:
 
 ```bash
 npm run dev
 ```
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser
+7. Open [http://localhost:3000](http://localhost:3000) in your browser
 
 ## Project Structure
 
@@ -94,9 +104,10 @@ npm run dev
   CreateProjectModal.tsx        # Create project dialog
   FeedbackThread.tsx            # Feedback display component
 /lib
-  db.ts                         # MongoDB connection
+  supabase.ts                   # Supabase client
   gemini.ts                     # Gemini API wrapper
-/models                         # Mongoose models
+/supabase
+  schema.sql                    # Database schema
 /types                          # TypeScript types
 ```
 
@@ -128,12 +139,22 @@ npm run dev
 - `POST /api/feedback/reject` - Reject a proposal (PM only)
 - `PATCH /api/feature/[id]` - Update feature (e.g., status)
 
-## Database Models
+## Database Schema
 
-- **User** - Auth0 user with role (pm, engineer, admin, viewer)
-- **Project** - Project with roadmap summary and risk level
-- **Feature** - Feature with priority, effort estimate, and dependencies
-- **Feedback** - Comments and proposals with AI analysis
+The database schema is defined in `supabase/schema.sql`. Key tables:
+
+- **users** - Auth0 user with role (pm, engineer, admin, viewer)
+- **projects** - Project with roadmap summary and risk level (JSONB)
+- **features** - Feature with priority, effort estimate, and dependencies (UUID array)
+- **feedback** - Comments and proposals with AI analysis
+
+## Real-time Features
+
+The application uses Supabase Realtime to provide instant updates:
+- Projects list updates when new projects are created
+- Kanban board updates when feature status changes
+- Feedback appears instantly when added
+- All changes are synchronized across all connected users
 
 ## License
 

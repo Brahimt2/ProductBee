@@ -1,55 +1,29 @@
-import mongoose, { Schema, Document, Types } from 'mongoose'
+import { BaseModel } from './base'
+import type { TicketType } from '@/lib/constants'
 
-export interface IFeature extends Document {
-  projectId: Types.ObjectId
+/**
+ * Feature model - Represents a feature/ticket in a project (Jira-style)
+ * Extends BaseModel for consistent structure
+ */
+export interface Feature extends BaseModel {
+  project_id: string
+  account_id: string
   title: string
   description: string
-  status: 'backlog' | 'active' | 'blocked' | 'complete'
-  priority: 'P0' | 'P1' | 'P2'
-  effortEstimateWeeks: number
-  dependsOn: Types.ObjectId[]
-  createdAt: Date
+  status: 'not_started' | 'in_progress' | 'blocked' | 'complete'
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  dependencies?: string[]
+  estimated_effort_weeks?: number
+  // Jira-style fields (Phase 6)
+  assigned_to?: string | null // User ID
+  reporter?: string | null // User ID
+  story_points?: number | null
+  labels?: string[]
+  acceptance_criteria?: string | null
+  ticket_type?: TicketType
+  // Timeline fields (Phase 7)
+  start_date?: string | null // ISO date string
+  end_date?: string | null // ISO date string
+  duration?: number | null // Duration in days
 }
-
-const FeatureSchema = new Schema<IFeature>({
-  projectId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Project',
-    required: true,
-    index: true,
-  },
-  title: {
-    type: String,
-    required: true,
-  },
-  description: {
-    type: String,
-    required: true,
-  },
-  status: {
-    type: String,
-    enum: ['backlog', 'active', 'blocked', 'complete'],
-    default: 'backlog',
-    required: true,
-  },
-  priority: {
-    type: String,
-    enum: ['P0', 'P1', 'P2'],
-    required: true,
-  },
-  effortEstimateWeeks: {
-    type: Number,
-    required: true,
-  },
-  dependsOn: [{
-    type: Schema.Types.ObjectId,
-    ref: 'Feature',
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-})
-
-export default mongoose.models.Feature || mongoose.model<IFeature>('Feature', FeatureSchema)
 

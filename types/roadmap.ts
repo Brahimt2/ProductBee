@@ -1,3 +1,9 @@
+/**
+ * Roadmap-related types
+ * Note: These are kept for backward compatibility
+ * New types should be added to feedback.ts
+ */
+
 export interface RoadmapFeature {
   title: string
   description: string

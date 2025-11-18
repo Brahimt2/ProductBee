@@ -1,59 +1,90 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
-import dbConnect from '@/lib/db'
-import Feedback from '@/models/Feedback'
-import User from '@/models/User'
-import mongoose from 'mongoose'
+import { createServerClient } from '@/lib/supabase'
+import { getUserFromSession, requireProposalApproval } from '@/lib/api/permissions'
+import { validateUUID, validateJsonBody, validateRequired, feedbackTypeToApi } from '@/lib/api/validation'
+import { handleError, successResponse, APIErrors } from '@/lib/api/errors'
+import type { RejectFeedbackRequest, RejectFeedbackResponse } from '@/types/api'
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const user = await getUserFromSession(session)
 
-    await dbConnect()
+    const body = await validateJsonBody<RejectFeedbackRequest>(request)
+    validateRequired(body, ['feedbackId'])
+    validateUUID(body.feedbackId, 'Feedback ID')
 
-    const { feedbackId } = await request.json()
+    const { feedbackId } = body
+    const supabase = createServerClient()
 
-    if (!feedbackId || !mongoose.Types.ObjectId.isValid(feedbackId)) {
-      return NextResponse.json({ error: 'Invalid feedback ID' }, { status: 400 })
-    }
+    // Get feedback - filtered by account_id for account isolation
+    const { data: feedback, error: feedbackError } = await supabase
+      .from('feedback')
+      .select('*')
+      .eq('id', feedbackId)
+      .eq('account_id', user.account_id)
+      .single()
 
-    // Get user and check if they're a PM
-    const user = await User.findOne({ auth0Id: session.user.sub })
-    if (!user || (user.role !== 'pm' && user.role !== 'admin')) {
-      return NextResponse.json(
-        { error: 'Only PMs and admins can reject proposals' },
-        { status: 403 }
-      )
-    }
-
-    const feedback = await Feedback.findById(feedbackId)
-    if (!feedback) {
-      return NextResponse.json({ error: 'Feedback not found' }, { status: 404 })
+    if (feedbackError || !feedback) {
+      throw APIErrors.notFound('Feedback')
     }
 
     if (feedback.status !== 'pending') {
-      return NextResponse.json(
-        { error: 'Feedback already processed' },
-        { status: 400 }
-      )
+      throw APIErrors.badRequest('Feedback already processed')
     }
 
-    feedback.status = 'rejected'
-    await feedback.save()
+    // Check permission to approve/reject proposals (PM/Admin + account isolation)
+    await requireProposalApproval(user, feedback.project_id)
 
-    return NextResponse.json({ 
+    // Update feedback status - filtered by account_id for account isolation
+    const { data: updatedFeedback, error: updateError } = await supabase
+      .from('feedback')
+      .update({ status: 'rejected' })
+      .eq('id', feedbackId)
+      .eq('account_id', user.account_id)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw APIErrors.internalError('Failed to update feedback')
+    }
+
+    // Fetch user data for the feedback creator
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('id', updatedFeedback.user_id)
+      .eq('account_id', user.account_id)
+      .single()
+
+    // Format response (convert DB format to API format)
+    const formattedFeedback = {
+      _id: updatedFeedback.id,
+      id: updatedFeedback.id,
+      projectId: updatedFeedback.project_id,
+      featureId: updatedFeedback.feature_id,
+      userId: userData && !userError ? {
+        _id: userData.id,
+        name: userData.name,
+        email: userData.email,
+      } : null,
+      type: feedbackTypeToApi(updatedFeedback.type), // Convert DB -> API
+      content: updatedFeedback.content,
+      proposedRoadmap: updatedFeedback.proposed_roadmap,
+      aiAnalysis: updatedFeedback.ai_analysis,
+      status: updatedFeedback.status,
+      createdAt: updatedFeedback.created_at,
+    }
+
+    const response: RejectFeedbackResponse = {
       message: 'Proposal rejected',
-      feedback 
-    })
-  } catch (error: any) {
-    console.error('Error rejecting feedback:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to reject feedback' },
-      { status: 500 }
-    )
+      feedback: formattedFeedback,
+    }
+
+    return successResponse(response)
+  } catch (error) {
+    return handleError(error)
   }
 }
 

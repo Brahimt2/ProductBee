@@ -1,41 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
-import dbConnect from '@/lib/db'
-import Project from '@/models/Project'
-import User from '@/models/User'
+import { createServerClient } from '@/lib/supabase'
+import { getUserFromSession } from '@/lib/api/permissions'
+import { handleError, successResponse } from '@/lib/api/errors'
+import type { GetProjectsResponse } from '@/types/api'
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getUserFromSession(session)
+
+    const supabase = createServerClient()
+
+    // Get all projects with creator info - filtered by account_id for account isolation
+    const { data: projects, error: projectsError } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        created_by:users!projects_created_by_fkey (
+          name,
+          email
+        )
+      `)
+      .eq('account_id', user.account_id)
+      .order('created_at', { ascending: false })
+
+    if (projectsError) {
+      throw projectsError
     }
 
-    await dbConnect()
+    // Transform data to match expected format
+    const formattedProjects = projects?.map((project) => ({
+      _id: project.id,
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      roadmap: project.roadmap,
+      createdAt: project.created_at,
+      createdBy: project.created_by ? {
+        name: project.created_by.name,
+        email: project.created_by.email,
+      } : null,
+    })) || []
 
-    // Get or create user
-    let user = await User.findOne({ auth0Id: session.user.sub })
-    if (!user) {
-      user = await User.create({
-        auth0Id: session.user.sub,
-        name: session.user.name || session.user.email || 'Unknown',
-        email: session.user.email || '',
-        role: 'viewer',
-      })
+    const response: GetProjectsResponse = {
+      projects: formattedProjects,
     }
 
-    // Get all projects (in a real app, you'd filter by team/user)
-    const projects = await Project.find()
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 })
-
-    return NextResponse.json({ projects })
-  } catch (error: any) {
-    console.error('Error fetching projects:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch projects' },
-      { status: 500 }
-    )
+    return successResponse(response)
+  } catch (error) {
+    return handleError(error)
   }
 }
 
